@@ -27,9 +27,12 @@ float filteredDerivative = 0;
 float previousFilteredDerivative = 0;
 
 float alpha = 0.2; // Derivative filter coefficient
+float distanceAlpha = 0.3; // Distance EMA coefficient
+float smoothedDistance = -1.0;
 
 unsigned long previousTime = 0;
 unsigned long lcdPreviousTime = 0;
+unsigned long lastValidReadingTime = 0;
 
 // --- Servo Configuration ---
 int centerAngle = 90;
@@ -37,7 +40,7 @@ int minAngle = 20;
 int maxAngle = 160;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200); // Faster baud rate to prevent serial logs from blocking the loop
   
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
@@ -54,46 +57,80 @@ void setup() {
   lcdPreviousTime = millis();
 }
 
-float getDistance() {
-  // 5-sample averaging
-  float sum = 0;
-  int validReadings = 0;
+float getSingleDistance() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
   
-  for(int i = 0; i < 5; i++) {
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-    
-    long duration = pulseIn(echoPin, HIGH, 30000); // 30ms timeout
-    if(duration > 0) {
-      float dist = duration * 0.034 / 2;
-      if(dist > 2.0 && dist < 400.0) { // Valid range filter
-        sum += dist;
-        validReadings++;
-      }
+  // 15ms timeout (approx 250cm range). Reduces blocking time significantly.
+  long duration = pulseIn(echoPin, HIGH, 15000); 
+  
+  if(duration > 0) {
+    float dist = duration * 0.034 / 2;
+    if(dist > 2.0 && dist < 250.0) { // Valid range filter
+      return dist;
     }
-    delay(5); // Small delay between pings
   }
-  
-  if (validReadings > 0) {
-    return sum / validReadings;
-  } else {
-    return -1.0; // Return invalid
+  return -1.0; // Return invalid
+}
+
+void handleSerialInput() {
+  if (Serial.available() > 0) {
+    char param = Serial.read();
+    float value = Serial.parseFloat();
+    
+    // Clear buffer of newlines or spaces
+    while (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r' || Serial.peek() == ' ')) {
+      Serial.read();
+    }
+    
+    if (param == 'P' || param == 'p') {
+      Kp = value;
+      Serial.print("Kp updated to: "); Serial.println(Kp);
+    } else if (param == 'I' || param == 'i') {
+      Ki = value;
+      integral = 0; // Reset integral to avoid sudden windup jumps
+      Serial.print("Ki updated to: "); Serial.println(Ki);
+    } else if (param == 'D' || param == 'd') {
+      Kd = value;
+      Serial.print("Kd updated to: "); Serial.println(Kd);
+    } else if (param == 'T' || param == 't') {
+      targetDistance = value;
+      Serial.print("Target updated to: "); Serial.println(targetDistance);
+    } else {
+      Serial.println("Invalid command. Use P<val>, I<val>, D<val>, or T<val> (e.g. P2.5)");
+    }
   }
 }
 
 void loop() {
+  handleSerialInput();
+  
   unsigned long currentTime = millis();
   float dt = (currentTime - previousTime) / 1000.0; // dt in seconds
   
   if (dt <= 0) return; // Prevent division by zero
   
-  float distance = getDistance();
+  float rawDistance = getSingleDistance();
   
-  if (distance > 0) { // Only calculate PID if we got a valid reading
-    error = targetDistance - distance;
+  if (rawDistance > 0) { 
+    lastValidReadingTime = currentTime;
+    
+    // Exponential Moving Average filter for distance
+    if (smoothedDistance < 0) {
+      smoothedDistance = rawDistance; // Initialize on first reading
+    } else {
+      smoothedDistance = (distanceAlpha * rawDistance) + ((1.0 - distanceAlpha) * smoothedDistance);
+    }
+    
+    error = targetDistance - smoothedDistance;
+    
+    // Deadband: Ignore small errors to prevent servo jitter
+    if (abs(error) < 1.0) {
+      error = 0;
+    }
     
     // Proportional
     float P = Kp * error;
@@ -123,7 +160,7 @@ void loop() {
     
     // --- Serial Logging ---
     Serial.print("Target:"); Serial.print(targetDistance);
-    Serial.print("\tDistance:"); Serial.print(distance);
+    Serial.print("\tDistance:"); Serial.print(smoothedDistance);
     Serial.print("\tError:"); Serial.print(error);
     Serial.print("\tP:"); Serial.print(P);
     Serial.print("\tI:"); Serial.print(I);
@@ -140,7 +177,7 @@ void loop() {
       lcd.print("T:");
       lcd.print(targetDistance, 1);
       lcd.print(" D:");
-      lcd.print(distance, 1);
+      lcd.print(smoothedDistance, 1);
       lcd.print("   "); // Clear trailing characters
       
       // Line 2: E:+9.2 S:109
@@ -151,6 +188,13 @@ void loop() {
       lcd.print(" S:");
       lcd.print(servoAngle);
       lcd.print("   "); // Clear trailing characters
+    }
+  } else {
+    // Failsafe Mode: If no valid reading for > 1000ms, return to center
+    if (currentTime - lastValidReadingTime > 1000) {
+      myServo.write(centerAngle);
+      integral = 0; // Reset integral so it doesn't snap back when target returns
+      smoothedDistance = -1.0; // Reset smoothing filter
     }
   }
 }
