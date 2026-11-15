@@ -135,7 +135,8 @@ void loop() {
     // Proportional
     float P = Kp * error;
     
-    // Integral with anti-windup
+    // Integral with anti-windup (clamp dt to prevent jump on reacquisition)
+    if (dt > 0.2) dt = 0.05; // Cap dt after signal loss
     integral += error * dt;
     integral = constrain(integral, -50.0, 50.0);
     float I = Ki * integral;
@@ -158,7 +159,7 @@ void loop() {
     previousFilteredDerivative = filteredDerivative;
     previousTime = currentTime;
     
-    // --- Serial Logging ---
+    // --- Serial Logging (Formatted for both Serial Monitor and Serial Plotter) ---
     Serial.print("Target:"); Serial.print(targetDistance);
     Serial.print("\tDistance:"); Serial.print(smoothedDistance);
     Serial.print("\tError:"); Serial.print(error);
@@ -178,7 +179,7 @@ void loop() {
       lcd.print(targetDistance, 1);
       lcd.print(" D:");
       lcd.print(smoothedDistance, 1);
-      lcd.print("   "); // Clear trailing characters
+      lcd.print("      "); // Clear trailing characters
       
       // Line 2: E:+9.2 S:109
       lcd.setCursor(0, 1);
@@ -187,14 +188,29 @@ void loop() {
       lcd.print(error, 1);
       lcd.print(" S:");
       lcd.print(servoAngle);
-      lcd.print("   "); // Clear trailing characters
+      lcd.print("      "); // Clear trailing characters
     }
   } else {
+    // Keep previousTime fresh so dt doesn't explode when target returns
+    previousTime = currentTime;
+
     // Failsafe Mode: If no valid reading for > 1000ms, return to center
     if (currentTime - lastValidReadingTime > 1000) {
       myServo.write(centerAngle);
       integral = 0; // Reset integral so it doesn't snap back when target returns
       smoothedDistance = -1.0; // Reset smoothing filter
+
+      // Update LCD to show Searching/Out of Range
+      if (currentTime - lcdPreviousTime >= 250) {
+        lcdPreviousTime = currentTime;
+        lcd.setCursor(0, 0);
+        lcd.print("T:");
+        lcd.print(targetDistance, 1);
+        lcd.print(" SEARCHING ");
+        
+        lcd.setCursor(0, 1);
+        lcd.print("Out of Range   ");
+      }
     }
   }
 }

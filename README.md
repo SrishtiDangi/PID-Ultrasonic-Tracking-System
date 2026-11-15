@@ -48,13 +48,29 @@ This project uses an Arduino to balance/track an object at a specific distance u
 ---
 
 ## 🛠️ Operating Instructions
-1. Upload `pid_control_main.ino` to your Arduino.
-2. Open the **Serial Monitor** and set the baud rate to **115200**.
-3. Place an object in front of the sensor. The servo will actuate to track it to the target distance (default 20cm).
 
-**Live Tuning via Serial Monitor:**
-You can update PID values without recompiling! Type the following into the Serial Monitor:
-- `P2.5` -> Sets Kp to 2.5
-- `I0.05` -> Sets Ki to 0.05
-- `D0.15` -> Sets Kd to 0.15
-- `T15` -> Sets Target Distance to 15 cm
+### Option 1: Standalone Physics Simulator (No Hardware Needed!)
+Perfect for presentations and software evaluations. Models second-order plant dynamics, acoustic noise, animated 2D graphics, and dynamic step response metrics ($t_r, t_s, M_p, e_{ss}$):
+```bash
+python simulator.py
+```
+- Interactive sliders for $K_p, K_i, K_d$, Target distance, and Sensor Noise.
+- Click **"⚡ Inject Physical Disturbance (Nudge)"** to demonstrate real-time dynamic PID recovery.
+- Can toggle between **Physics Simulation** and **Hardware USB** with a single click.
+
+### Option 2: Live Hardware Telemetry GUI Dashboard
+Connects to the physical Arduino over USB at 115200 baud for real-time oscilloscope tracking and live PID tuning:
+```bash
+python gui_monitor.py
+```
+
+### Option 3: Arduino Embedded Firmware
+1. Open [`pid_control_main/pid_control_main.ino`](file:///c:/Users/EW0116TU/PID/PID-Ultrasonic-Tracking-System/pid_control_main/pid_control_main.ino) in Arduino IDE and click **Upload**.
+2. Open **Tools > Serial Plotter** (`Ctrl + Shift + L`) at **115200 baud** to view real-time tracking curves.
+3. LCD displays real-time telemetry ($T, D, E, S$) and failsafe status.
+
+---
+
+## 📚 Academic Documentation
+- [**Full 100-Mark Project Report**](file:///c:/Users/EW0116TU/PID/PID-Ultrasonic-Tracking-System/Docs/Full_Project_Report.md): Complete mathematical modeling ($s$-domain & $z$-domain), noise mitigation derivations, transient stability analysis ($t_r, t_s, M_p$), and experimental results.
+- [**Viva & Presentation Cheatsheet**](file:///c:/Users/EW0116TU/PID/PID-Ultrasonic-Tracking-System/Docs/Project_Nodes.md): 30-second presentation elevator pitch, block diagrams, and answers to the top professor questions.
