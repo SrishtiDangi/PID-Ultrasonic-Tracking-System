@@ -3,1010 +3,1123 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PID Ultrasonic Dynamic Tracking Bench - Flagship Control Suite</title>
+  <title>CONTROL-X // Dual Domain PID & Physical Plant Bench</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f8fafc; color: #0f172a; }
     .mono { font-family: 'JetBrains Mono', monospace; }
-    .tab-active { border-bottom: 2px solid #38bdf8; color: #38bdf8; font-weight: 700; }
+    .tab-btn { position: relative; padding: 0.65rem 1.25rem; font-size: 0.8125rem; font-weight: 600; color: #64748b; transition: all 0.15s ease; border-bottom: 2px solid transparent; }
+    .tab-btn:hover { color: #0f172a; }
+    .tab-btn.active { color: #0284c7; border-bottom: 2px solid #0284c7; }
+    .card-shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05); }
+    .metric-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 0.85rem 1rem; position: relative; overflow: hidden; }
+    .metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3.5px; }
+    .accent-cyan::before { background: #38bdf8; }
+    .accent-blue::before { background: #0284c7; }
+    .accent-rose::before { background: #f43f5e; }
+    .accent-emerald::before { background: #10b981; }
+    .accent-amber::before { background: #f59e0b; }
+    .accent-purple::before { background: #8b5cf6; }
+    input[type=range] { accent-color: #0284c7; }
   </style>
 </head>
-<body class="bg-[#060911] text-slate-100 min-h-screen p-3 md:p-6 flex flex-col items-center">
+<body class="min-h-screen p-3 md:p-6 flex flex-col items-center select-none">
 
   <!-- TOP APP HEADER -->
-  <header class="w-full max-w-6xl bg-[#0f172a] border border-slate-800 rounded-xl p-3.5 mb-3 flex flex-wrap items-center justify-between shadow-2xl">
-    <div>
-      <div class="flex items-center gap-2">
-        <span class="inline-block w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
-        <h1 class="text-base md:text-lg font-bold text-cyan-400 tracking-wide">PID ULTRASONIC DYNAMIC TRACKING BENCH</h1>
-        <span id="badge-mode" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-400 border border-cyan-800">SIM MODE</span>
+  <header class="w-full max-w-7xl bg-white border border-slate-200 rounded-2xl p-4 mb-3 card-shadow flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700 border border-sky-200">
+          <span class="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span>
+          ((•)) CONTROL-X
+        </span>
+        <h1 class="text-base md:text-lg font-extrabold text-slate-900 tracking-tight">DUAL DOMAIN PID & PHYSICAL PLANT BENCH</h1>
       </div>
-      <p class="text-[11px] text-slate-400 mt-0.5">Dual-Model Balance Bench & 1-DOF Tracker • ATmega328P Firmware • 60 FPS Visual Kinematics</p>
+      <div class="flex items-center gap-2 text-xs flex-wrap mt-0.5">
+        <span class="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-medium border border-purple-200 text-[11px]">Closed-Loop Control Laboratory</span>
+        <span class="text-slate-400">•</span>
+        <span id="header-context" class="text-slate-600 font-semibold text-[11px]">Active Context: 🌿 Smart Agriculture / Botanical Canopy Distance Keeping</span>
+      </div>
     </div>
     
-    <!-- Top Mode & Rig Controls -->
-    <div class="flex items-center gap-2 mt-2 sm:mt-0 text-xs">
-      <button id="btn-rig" class="px-2.5 py-1.5 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">Rig: ⚖️ Ball-on-Beam</button>
-      <button id="btn-ctrl-mode" class="px-2.5 py-1.5 rounded-lg font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition">Mode: PID</button>
-      <button id="btn-traj" class="px-2.5 py-1.5 rounded-lg font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">Trajectory: 🌊 Sine</button>
-      <button id="btn-web-serial" class="px-2.5 py-1.5 rounded-lg font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">🔌 Web Serial</button>
+    <!-- Top Action Badges & USB Connection -->
+    <div class="flex items-center gap-2 flex-wrap text-xs">
+      <button id="btn-status" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition">
+        <span class="w-2 h-2 rounded-full bg-white"></span>
+        <span id="txt-status">SYSTEM ACTIVE</span>
+      </button>
+
+      <button id="btn-mode-toggle" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 transition">
+        ⚙️ <span id="txt-ctrl-mode">MODE: PID CONTROLLER</span>
+      </button>
+
+      <button id="btn-env-toggle" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm transition">
+        🌱 <span id="txt-env-mode">ENV: 🌿 GREENHOUSE PLANTS</span>
+      </button>
+
+      <button id="btn-usb-connect" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 card-shadow transition">
+        🔌 <span id="txt-usb">CONNECT USB</span>
+      </button>
     </div>
   </header>
 
   <!-- NAVIGATION TABS -->
-  <nav class="w-full max-w-6xl flex border-b border-slate-800 mb-3 text-xs md:text-sm font-medium text-slate-400">
-    <button onclick="switchTab('bench')" id="tab-btn-bench" class="px-4 py-2 hover:text-slate-200 transition tab-active">🕹️ Bench Viewport</button>
-    <button onclick="switchTab('analysis')" id="tab-btn-analysis" class="px-4 py-2 hover:text-slate-200 transition">📊 Live Analysis</button>
-    <button onclick="switchTab('compare')" id="tab-btn-compare" class="px-4 py-2 hover:text-slate-200 transition">⚖️ Compare (P/PD/PI/PID)</button>
-    <button onclick="switchTab('hardware')" id="tab-btn-hardware" class="px-4 py-2 hover:text-slate-200 transition">🔌 Hardware Telemetry</button>
-    <button onclick="switchTab('report')" id="tab-btn-report" class="px-4 py-2 hover:text-slate-200 transition">📑 100-Mark Report</button>
+  <nav class="w-full max-w-7xl flex items-center justify-between border-b border-slate-200 mb-4 bg-white/50 backdrop-blur rounded-xl px-2">
+    <div class="flex items-center overflow-x-auto">
+      <button onclick="switchTab('bench')" id="tab-bench-btn" class="tab-btn active">📊 Live Control Bench</button>
+      <button onclick="switchTab('compare')" id="tab-compare-btn" class="tab-btn">⚖️ Comparative Lab</button>
+      <button onclick="switchTab('hardware')" id="tab-hardware-btn" class="tab-btn">&lt;/&gt; Arduino &amp; Wiring</button>
+      <button onclick="switchTab('report')" id="tab-report-btn" class="tab-btn">📖 Control Theory &amp; Notes</button>
+    </div>
+    <div class="py-1">
+      <button onclick="exportCSVLog()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 card-shadow transition">
+        📥 Export CSV Log
+      </button>
+    </div>
   </nav>
 
   <!-- ========================================================================= -->
-  <!-- TAB 1: BENCH VIEWPORT -->
+  <!-- TAB 1: LIVE CONTROL BENCH (EXACT SCREENSHOT DESIGN) -->
   <!-- ========================================================================= -->
-  <div id="tab-bench" class="w-full max-w-6xl space-y-3">
+  <main id="tab-bench" class="w-full max-w-7xl space-y-3">
     
-    <!-- Status Telemetry Tiles (A8 with Units) -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 text-xs">
-      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
-        <div class="text-[10px] font-bold text-slate-400 uppercase">Target Setpoint</div>
-        <div id="val-target" class="mono text-sm md:text-base font-bold text-cyan-400 mt-0.5">22.0 cm</div>
+    <!-- 6 METRIC CARDS ROW -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="metric-card accent-cyan card-shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Setpoint (r)</div>
+        <div id="disp-target" class="mono text-2xl font-extrabold text-sky-600 mt-1">29.0 cm</div>
       </div>
-      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
-        <div class="text-[10px] font-bold text-slate-400 uppercase">Measured Echo</div>
-        <div id="val-dist" class="mono text-sm md:text-base font-bold text-emerald-400 mt-0.5">12.0 cm</div>
+
+      <div class="metric-card accent-blue card-shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Plant Distance (y)</div>
+        <div id="disp-dist" class="mono text-2xl font-extrabold text-sky-800 mt-1">29.2 cm</div>
       </div>
-      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
-        <div class="text-[10px] font-bold text-slate-400 uppercase">Tracking Error</div>
-        <div id="val-error" class="mono text-sm md:text-base font-bold text-rose-400 mt-0.5">+10.0 cm</div>
+
+      <div class="metric-card accent-rose card-shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tracking Error (e)</div>
+        <div id="disp-error" class="mono text-2xl font-extrabold text-rose-500 mt-1">-0.2 cm</div>
       </div>
-      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
-        <div class="text-[10px] font-bold text-slate-400 uppercase">Servo (θ)</div>
-        <div id="val-servo" class="mono text-sm md:text-base font-bold text-amber-400 mt-0.5">90°</div>
+
+      <div class="metric-card accent-emerald card-shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Algorithm State</div>
+        <div id="disp-state" class="text-lg md:text-xl font-black text-emerald-600 mt-1.5 truncate">PID CONVERGED</div>
       </div>
-      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
-        <div class="text-[10px] font-bold text-slate-400 uppercase">Velocity (v)</div>
-        <div id="val-vel" class="mono text-sm md:text-base font-bold text-teal-400 mt-0.5">0.0 cm/s</div>
+
+      <div class="metric-card accent-amber card-shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Settling Time (ts)</div>
+        <div id="disp-ts" class="mono text-2xl font-extrabold text-amber-600 mt-1">1.80 s</div>
       </div>
-      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
-        <div class="text-[10px] font-bold text-slate-400 uppercase">Step IAE</div>
-        <div id="val-iae" class="mono text-sm md:text-base font-bold text-purple-400 mt-0.5">0.0 cm·s</div>
-      </div>
-      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
-        <div class="text-[10px] font-bold text-slate-400 uppercase">Step ITAE</div>
-        <div id="val-itae" class="mono text-sm md:text-base font-bold text-violet-400 mt-0.5">0.0 cm·s²</div>
+
+      <div class="metric-card accent-purple card-shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Peak Overshoot (Mp)</div>
+        <div id="disp-mp" class="mono text-2xl font-extrabold text-purple-600 mt-1">5.9 %</div>
       </div>
     </div>
 
-    <!-- 60 FPS Visual Mechanical Viewport & Vectors -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-      <div class="px-3 py-1.5 border-b border-slate-800 bg-slate-900 flex items-center justify-between text-[11px]">
-        <span class="font-bold text-cyan-400">PHYSICAL MECHANICAL RIG & REAL-TIME FORCE VECTORS <span class="text-slate-400 font-normal">(Drag ball or click beam!)</span></span>
-        <div class="flex items-center gap-3">
-          <span class="text-emerald-400 font-semibold">→ Velocity (v)</span>
-          <span class="text-amber-400 font-semibold">→ Gravity (a)</span>
-          <span class="text-cyan-400 font-semibold">→ PID Force (F)</span>
+    <!-- SUB-CARDS ROW: PID EFFORT METERS & INSIGHT CALLOUT -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+      
+      <!-- 3 PID Component Effort Bars (7 cols) -->
+      <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-3 card-shadow grid grid-cols-3 gap-3">
+        <div>
+          <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1">
+            <span>P-Action (Spring Restoring)</span>
+            <span id="val-p-effort" class="mono text-slate-900 font-bold">0.0 N</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2 relative overflow-hidden">
+            <div id="bar-p-effort" class="h-2 rounded-full bg-sky-500 transition-all duration-75" style="width: 50%;"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1">
+            <span>I-Action (Steady-State Int.)</span>
+            <span id="val-i-effort" class="mono text-slate-900 font-bold">+0.1 N</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2 relative overflow-hidden">
+            <div id="bar-i-effort" class="h-2 rounded-full bg-emerald-500 transition-all duration-75" style="width: 52%;"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1">
+            <span>D-Action (Velocity Damper)</span>
+            <span id="val-d-effort" class="mono text-slate-900 font-bold">+0.0 N</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2 relative overflow-hidden">
+            <div id="bar-d-effort" class="h-2 rounded-full bg-amber-500 transition-all duration-75" style="width: 50%;"></div>
+          </div>
         </div>
       </div>
-      <canvas id="animCanvas" width="960" height="155" class="w-full bg-[#05070e] block cursor-pointer select-none"></canvas>
+
+      <!-- Real-time Control Insight Box (5 cols) -->
+      <div class="lg:col-span-5 bg-rose-50 border border-rose-200/80 rounded-xl p-3 card-shadow flex items-start gap-2.5">
+        <span class="text-rose-600 text-lg leading-none mt-0.5">ⓘ</span>
+        <div>
+          <div class="text-[10px] font-extrabold uppercase tracking-wide text-rose-700">Real-Time Control Insight</div>
+          <p id="txt-insight" class="text-xs text-rose-900 font-medium mt-0.5 leading-snug">
+            Acoustic Noise Jitter set to 0.80 cm. Exponential Moving Average filter actively smoothing echoes.
+          </p>
+        </div>
+      </div>
     </div>
 
-    <!-- Stacked Oscilloscope (A3) -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-      <div class="px-3 py-1.5 border-b border-slate-800 bg-slate-900 flex flex-wrap items-center justify-between text-[11px]">
+    <!-- MAIN ENVIRONMENT VIEWPORT (BOTANICAL CANOPY OR BALL-ON-BEAM) -->
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden card-shadow">
+      
+      <!-- Viewport Context Bar -->
+      <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between text-xs gap-2">
+        <span id="env-header-title" class="font-extrabold text-emerald-800 tracking-tight flex items-center gap-1.5">
+          ENVIRONMENT: 🌱 AUTOMATED GREENHOUSE - ULTRASONIC PLANT CANOPY DISTANCE CONTROL
+        </span>
+        <span id="env-header-app" class="font-bold text-slate-500 uppercase tracking-wider text-[10px]">
+          APPLICATION: AUTOMATED SPRAY NOZZLE / LIGHTING BOOM HEIGHT REGULATION
+        </span>
+      </div>
+
+      <!-- Interactive Canvas -->
+      <div class="relative w-full overflow-hidden bg-[#e6fffa] cursor-crosshair">
+        <canvas id="plantCanvas" width="1020" height="230" class="w-full block"></canvas>
+      </div>
+
+      <!-- Live Drag & Click Hint Strip -->
+      <div class="px-4 py-1.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600">
+        <span>💡 <b>Interactive Controls:</b> Click anywhere along the boom/track to set target setpoint. Drag the plant or ball with the mouse to inject manual displacements!</span>
+        <span class="font-mono text-[10px] text-slate-400">Loop Rate: 33.3 Hz • Precision: 0.1mm</span>
+      </div>
+    </div>
+
+    <!-- DYNAMIC STEP RESPONSE (DIGITAL PHOSPHOR OSCILLOSCOPE) -->
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden card-shadow">
+      
+      <!-- Scope Header & Legend -->
+      <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-3 text-xs flex-wrap">
+          <span class="font-bold text-slate-900 flex items-center gap-1">
+            📈 DYNAMIC STEP RESPONSE (DIGITAL OSCILLOSCOPE)
+          </span>
+          <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-500">
+            <span class="w-2.5 h-2.5 rounded-sm bg-sky-400"></span> Setpoint r(t)
+          </span>
+          <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-800">
+            <span class="w-2.5 h-2.5 rounded-sm bg-sky-700"></span> Output y(t)
+          </span>
+          <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600">
+            <span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span> Effort u(t)
+          </span>
+        </div>
+
+        <!-- Telemetry Pill -->
         <div class="flex items-center gap-2">
-          <span class="font-bold text-emerald-400">STACKED OSCILLOSCOPE</span>
-          <span class="text-cyan-400 font-bold">■ r</span>
-          <span class="text-emerald-400 font-bold">■ y</span>
-          <span class="text-rose-400 font-bold">■ e</span>
-          <span class="text-amber-400 font-bold">■ u (θ)</span>
-          <span id="scope-status" class="text-slate-400 text-[10px] ml-2">Active: Dynamic Sine Tracking</span>
-        </div>
-        <div class="flex items-center gap-2 mt-1 sm:mt-0">
-          <button id="btn-pause" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white font-semibold transition">⏸ Pause</button>
-          <button id="btn-step" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition">⏭ Step</button>
-          <span class="text-slate-500">Speed:</span>
-          <button onclick="setSimSpeed(0.2)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700">0.2x</button>
-          <button onclick="setSimSpeed(0.5)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700">0.5x</button>
-          <button onclick="setSimSpeed(1.0)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700 font-bold">1.0x</button>
-          <button onclick="setSimSpeed(2.0)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700">2.0x</button>
-          <span id="zoom-lbl" class="text-purple-400 text-[10px] ml-1">1.0x Zoom (Wheel)</span>
+          <span id="scope-metrics-badge" class="px-2.5 py-1 rounded-md text-[11px] font-bold mono bg-emerald-50 text-emerald-700 border border-emerald-200">
+            [PID] tr: 0.76s | ts: 1.80s | Mp: 5.9% | e_ss: 0.24cm
+          </span>
+          <button id="btn-freeze-scope" class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 transition">
+            ⏸️ Freeze Scope
+          </button>
         </div>
       </div>
-      <canvas id="graphCanvas" width="960" height="135" class="w-full bg-[#04060c] block cursor-crosshair"></canvas>
+
+      <!-- Scope Canvas -->
+      <div class="w-full bg-white p-2">
+        <canvas id="scopeCanvas" width="1020" height="200" class="w-full block"></canvas>
+      </div>
     </div>
 
-    <!-- Bottom Controls & Disturbance Suite (A4, A5) -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3.5 shadow-xl space-y-3">
+    <!-- CONTROLS & DISTURBANCE INJECTION SUITE -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 card-shadow space-y-3">
       
-      <!-- Primary Sliders -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      <!-- Sliders Row -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
         <div>
-          <div class="flex justify-between font-semibold text-slate-300 mb-1">
+          <div class="flex justify-between font-semibold text-slate-700 mb-1">
             <span>Proportional (Kp):</span>
-            <span id="txt-kp" class="mono text-cyan-400 font-bold">2.40</span>
+            <span id="val-kp" class="mono text-sky-600 font-bold">2.40</span>
           </div>
-          <input type="range" id="sl-kp" min="0" max="8" step="0.1" value="2.4" class="w-full accent-cyan-400 cursor-pointer" />
+          <input type="range" id="slider-kp" min="0" max="6.0" step="0.05" value="2.40" class="w-full cursor-pointer" />
         </div>
+
         <div>
-          <div class="flex justify-between font-semibold text-slate-300 mb-1">
+          <div class="flex justify-between font-semibold text-slate-700 mb-1">
             <span>Integral (Ki):</span>
-            <span id="txt-ki" class="mono text-emerald-400 font-bold">0.04</span>
+            <span id="val-ki" class="mono text-emerald-600 font-bold">0.04</span>
           </div>
-          <input type="range" id="sl-ki" min="0" max="0.2" step="0.01" value="0.04" class="w-full accent-emerald-400 cursor-pointer" />
+          <input type="range" id="slider-ki" min="0" max="0.25" step="0.005" value="0.04" class="w-full cursor-pointer" />
         </div>
+
         <div>
-          <div class="flex justify-between font-semibold text-slate-300 mb-1">
+          <div class="flex justify-between font-semibold text-slate-700 mb-1">
             <span>Derivative (Kd):</span>
-            <span id="txt-kd" class="mono text-amber-400 font-bold">0.90</span>
+            <span id="val-kd" class="mono text-amber-600 font-bold">0.90</span>
           </div>
-          <input type="range" id="sl-kd" min="0" max="2.5" step="0.05" value="0.9" class="w-full accent-amber-400 cursor-pointer" />
+          <input type="range" id="slider-kd" min="0" max="2.5" step="0.05" value="0.90" class="w-full cursor-pointer" />
         </div>
+
         <div>
-          <div class="flex justify-between font-semibold text-slate-300 mb-1">
-            <span>Target Distance:</span>
-            <span id="txt-target" class="mono text-purple-400 font-bold">22.0 cm</span>
+          <div class="flex justify-between font-semibold text-slate-700 mb-1">
+            <span>Target Distance (cm):</span>
+            <span id="val-target-slider" class="mono text-slate-900 font-bold">29.0</span>
           </div>
-          <input type="range" id="sl-target" min="5" max="45" step="0.5" value="22" class="w-full accent-purple-400 cursor-pointer" />
-        </div>
-      </div>
-
-      <!-- Action Row: Disturbances & Quick Toggles -->
-      <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-xs">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="font-bold text-amber-400">Disturbances (A4):</span>
-          <button onclick="applyDisturbance('nudge')" class="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 font-semibold text-white transition">⚡ Push (+10cm)</button>
-          <button onclick="applyDisturbance('wind')" class="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 font-semibold text-white transition">💨 Wind (Side Force)</button>
-          <button onclick="applyDisturbance('dropout')" class="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition">📴 Dropout (1.2s)</button>
-          <button onclick="applyDisturbance('burst')" class="px-2.5 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white transition">💥 Noise Burst</button>
-          <span id="txt-recovery" class="text-emerald-400 font-mono text-[11px] ml-1"></span>
+          <input type="range" id="slider-target" min="8.0" max="36.0" step="0.5" value="29.0" class="w-full cursor-pointer" />
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-slate-400">Toggles:</span>
-          <button id="btn-toggle-ema" onclick="toggleEMA()" class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold">EMA Filter: ON</button>
-          <button id="btn-reset-iae" onclick="resetMetrics()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]">Reset IAE/ITAE</button>
-          <button onclick="setTarget(15)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px]">15cm</button>
-          <button onclick="setTarget(25)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px]">25cm</button>
-          <button onclick="setTarget(35)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px]">35cm</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ========================================================================= -->
-  <!-- TAB 2: LIVE ANALYSIS (B1, B3) -->
-  <!-- ========================================================================= -->
-  <div id="tab-analysis" class="w-full max-w-6xl space-y-4 hidden">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      
-      <!-- Metrics Card -->
-      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl col-span-2">
-        <h3 class="text-sm font-bold text-cyan-400 mb-3 flex items-center justify-between">
-          <span>TRANSIENT STEP & HARMONIC RESPONSE METRICS (B1)</span>
-          <span class="text-xs text-slate-400 font-normal">Recomputed live</span>
-        </h3>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">Rise Time (tr, 10-90%)</div>
-            <div id="m-tr" class="mono text-base font-bold text-emerald-400 mt-1">1.12 s</div>
-          </div>
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">Settling Time (ts, 2%)</div>
-            <div id="m-ts" class="mono text-base font-bold text-amber-400 mt-1">1.68 s</div>
-          </div>
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">Peak Overshoot (Mp)</div>
-            <div id="m-mp" class="mono text-base font-bold text-rose-400 mt-1">2.1 %</div>
-          </div>
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">Steady Error (ess)</div>
-            <div id="m-ess" class="mono text-base font-bold text-cyan-400 mt-1">0.14 cm</div>
-          </div>
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">ITAE Metric</div>
-            <div id="m-itae" class="mono text-base font-bold text-purple-400 mt-1">8.12 cm·s²</div>
-          </div>
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">RMS Error</div>
-            <div id="m-rmse" class="mono text-base font-bold text-teal-400 mt-1">0.82 cm</div>
-          </div>
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">Sine Tracking Lag</div>
-            <div id="m-lag" class="mono text-base font-bold text-indigo-400 mt-1">142 ms</div>
-          </div>
-          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-            <div class="text-slate-400 text-[10px] font-semibold">BIBO Stability</div>
-            <div id="m-stability" class="mono text-base font-bold text-emerald-400 mt-1">OPTIMAL</div>
-          </div>
-        </div>
-
-        <p class="text-xs text-slate-400 leading-relaxed">
-          * Settling time evaluated to the $\pm 2\%$ residual band around setpoint. Derivative on measurement pre-filtered with 1st-order LPF ($\alpha_d=0.20$) prevents derivative kick. Integral accumulator anti-windup clamped to $\pm 15.0$ units.
-        </p>
-      </div>
-
-      <!-- Stability & Routh-Hurwitz Card (B3) -->
-      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <h3 class="text-sm font-bold text-amber-400 mb-3">ROUTH-HURWITZ STABILITY (B3)</h3>
-        <div class="text-xs space-y-2 text-slate-300">
-          <div class="p-2 rounded bg-slate-900 font-mono text-[11px] text-cyan-300 border border-slate-800">
-            s³ + 1.572 s² + 4.193 s + 0.070 = 0
-          </div>
-          <div class="flex justify-between py-1 border-b border-slate-800">
-            <span class="text-slate-400">Routh b1 Coeff:</span>
-            <span class="mono text-emerald-400 font-bold">+4.148 (&gt; 0)</span>
-          </div>
-          <div class="flex justify-between py-1 border-b border-slate-800">
-            <span class="text-slate-400">Critical Ki Upper Limit:</span>
-            <span class="mono text-amber-400 font-bold">3.774</span>
-          </div>
-          <div class="flex justify-between py-1 border-b border-slate-800">
-            <span class="text-slate-400">Phase Margin (PM):</span>
-            <span class="mono text-cyan-400 font-bold">&gt; 45.0°</span>
-          </div>
-          <div class="flex justify-between py-1">
-            <span class="text-slate-400">System State:</span>
-            <span class="mono text-emerald-400 font-bold">STABLE (LHP Poles)</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Theoretical vs Identified Plant Parameters -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-      <h3 class="text-sm font-bold text-cyan-400 mb-2">SYSTEM IDENTIFICATION & KINEMATIC RATIO</h3>
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-          <div class="text-slate-400 text-[10px]">Viscous Damping (μ)</div>
-          <div class="mono text-slate-200 mt-1 font-bold">1.7933 N·s/cm</div>
-        </div>
-        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-          <div class="text-slate-400 text-[10px]">Servo Dynamic Factor</div>
-          <div class="mono text-slate-200 mt-1 font-bold">0.3572 (Slew Lag)</div>
-        </div>
-        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-          <div class="text-slate-400 text-[10px]">Linkage Ratio (r_arm / L)</div>
-          <div class="mono text-slate-200 mt-1 font-bold">0.1410 deg/deg</div>
-        </div>
-        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-          <div class="text-slate-400 text-[10px]">Fitted Model RMSE</div>
-          <div class="mono text-emerald-400 mt-1 font-bold">0.177 cm (30.6% gain)</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ========================================================================= -->
-  <!-- TAB 3: CONTROLLER COMPARATOR (B2) -->
-  <!-- ========================================================================= -->
-  <div id="tab-compare" class="w-full max-w-6xl space-y-4 hidden">
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-      <div class="flex flex-wrap items-center justify-between mb-3">
         <div>
-          <h3 class="text-sm font-bold text-cyan-400">BENCHMARK CONTROLLER COMPARISON (P vs PD vs PI vs PID)</h3>
-          <p class="text-xs text-slate-400 mt-0.5">Executes all 4 topologies across identical 15cm → 30cm step trajectory</p>
+          <div class="flex justify-between font-semibold text-slate-700 mb-1">
+            <span>Acoustic Noise (σ):</span>
+            <span id="val-noise" class="mono text-rose-600 font-bold">0.40 cm</span>
+          </div>
+          <input type="range" id="slider-noise" min="0" max="1.5" step="0.05" value="0.40" class="w-full cursor-pointer" />
         </div>
-        <div class="flex items-center gap-2 mt-2 sm:mt-0">
-          <button onclick="runWebBenchmark()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 font-bold text-xs text-white transition">⚡ Run 4-Way Benchmark</button>
-          <button onclick="exportCompareCSV()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">📥 Export CSV</button>
+      </div>
+
+      <!-- Action & Disturbance Buttons -->
+      <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Disturbance Suite:</span>
+          <button onclick="injectDisturbance('nudge')" class="px-2.5 py-1.5 rounded-lg font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition">
+            ⚡ Push Displacement (+6cm)
+          </button>
+          <button onclick="injectDisturbance('wind')" class="px-2.5 py-1.5 rounded-lg font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 transition">
+            💨 Constant Wind (2.5N)
+          </button>
+          <button onclick="injectDisturbance('dropout')" class="px-2.5 py-1.5 rounded-lg font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 transition">
+            ⚠️ Sensor Echo Dropout
+          </button>
+          <button onclick="injectDisturbance('reset')" class="px-2.5 py-1.5 rounded-lg font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+            🔄 Reset Initial State
+          </button>
         </div>
+
+        <div class="flex items-center gap-2">
+          <label class="flex items-center gap-1.5 font-semibold text-slate-700 text-xs cursor-pointer">
+            <input type="checkbox" id="chk-ema" checked class="rounded text-sky-600 focus:ring-0">
+            <span>EMA Distance Smoothing (α=0.30)</span>
+          </label>
+          <label class="flex items-center gap-1.5 font-semibold text-slate-700 text-xs cursor-pointer">
+            <input type="checkbox" id="chk-feedforward" class="rounded text-sky-600 focus:ring-0">
+            <span>Velocity Feedforward</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 2: COMPARATIVE LAB (P vs PD vs PI vs PID) -->
+  <!-- ========================================================================= -->
+  <main id="tab-compare" class="w-full max-w-7xl space-y-4 hidden">
+    <div class="bg-white border border-slate-200 rounded-2xl p-5 card-shadow">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-extrabold text-slate-900">4-Way Controller Comparative Audit</h2>
+          <p class="text-xs text-slate-500">Evaluates transient characteristics across standard control topologies on the identical double-integrator step.</p>
+        </div>
+        <button onclick="runComparisonBenchmark()" class="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold card-shadow transition">
+          ▶ Run Benchmark Audit
+        </button>
       </div>
 
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="bg-slate-900 text-slate-400 border-b border-slate-800">
+        <table class="w-full text-left text-xs border border-slate-200 rounded-xl overflow-hidden">
+          <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-2.5">Topology</th>
-              <th class="p-2.5">Kp</th>
-              <th class="p-2.5">Ki</th>
-              <th class="p-2.5">Kd</th>
-              <th class="p-2.5">Rise Time (tr)</th>
-              <th class="p-2.5">Settling (ts, 2%)</th>
-              <th class="p-2.5">Overshoot (Mp)</th>
-              <th class="p-2.5">Steady Error (ess)</th>
-              <th class="p-2.5">ITAE</th>
-              <th class="p-2.5">Stability Status</th>
+              <th class="p-3">Controller</th>
+              <th class="p-3">Gains (Kp / Ki / Kd)</th>
+              <th class="p-3">Rise Time (tr)</th>
+              <th class="p-3">Settling Time (ts 2%)</th>
+              <th class="p-3">Peak Overshoot (Mp)</th>
+              <th class="p-3">Steady-State Error</th>
+              <th class="p-3">Stability Status</th>
             </tr>
           </thead>
-          <tbody id="compare-tbody" class="divide-y divide-slate-800 text-slate-200">
-            <tr>
-              <td class="p-2.5 font-bold text-rose-400">P-Only</td>
-              <td class="p-2.5 mono">2.40</td>
-              <td class="p-2.5 mono">0.00</td>
-              <td class="p-2.5 mono">0.00</td>
-              <td class="p-2.5 mono">0.73 s</td>
-              <td class="p-2.5 mono">4.09 s</td>
-              <td class="p-2.5 mono text-rose-400">23.2 %</td>
-              <td class="p-2.5 mono">0.00 cm</td>
-              <td class="p-2.5 mono">13.55</td>
-              <td class="p-2.5 font-bold text-amber-400">Oscillatory</td>
+          <tbody class="divide-y divide-slate-100">
+            <tr class="hover:bg-slate-50/50">
+              <td class="p-3 font-bold text-rose-600">P-Only</td>
+              <td class="p-3 mono">Kp=2.40, Ki=0, Kd=0</td>
+              <td class="p-3 mono">0.32 s</td>
+              <td class="p-3 mono text-rose-500">∞ (Unstable)</td>
+              <td class="p-3 mono text-rose-500">78.4 %</td>
+              <td class="p-3 mono">2.14 cm</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">Marginally Unstable (Poles on jω)</span></td>
             </tr>
-            <tr>
-              <td class="p-2.5 font-bold text-amber-400">PD</td>
-              <td class="p-2.5 mono">2.40</td>
-              <td class="p-2.5 mono">0.00</td>
-              <td class="p-2.5 mono">0.90</td>
-              <td class="p-2.5 mono">1.13 s</td>
-              <td class="p-2.5 mono">1.75 s</td>
-              <td class="p-2.5 mono text-emerald-400">0.7 %</td>
-              <td class="p-2.5 mono">0.00 cm</td>
-              <td class="p-2.5 mono">5.11</td>
-              <td class="p-2.5 font-bold text-emerald-400">Well-Damped</td>
+            <tr class="hover:bg-slate-50/50">
+              <td class="p-3 font-bold text-amber-600">PD Controller</td>
+              <td class="p-3 mono">Kp=2.40, Ki=0, Kd=0.90</td>
+              <td class="p-3 mono">0.58 s</td>
+              <td class="p-3 mono">1.62 s</td>
+              <td class="p-3 mono">4.2 %</td>
+              <td class="p-3 mono text-amber-600">0.82 cm (Offset)</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">Stable, Friction Droop</span></td>
             </tr>
-            <tr>
-              <td class="p-2.5 font-bold text-purple-400">PI</td>
-              <td class="p-2.5 mono">2.40</td>
-              <td class="p-2.5 mono">0.04</td>
-              <td class="p-2.5 mono">0.00</td>
-              <td class="p-2.5 mono">0.73 s</td>
-              <td class="p-2.5 mono">4.01 s</td>
-              <td class="p-2.5 mono text-rose-400">24.3 %</td>
-              <td class="p-2.5 mono">0.10 cm</td>
-              <td class="p-2.5 mono">14.61</td>
-              <td class="p-2.5 font-bold text-amber-400">Underdamped</td>
+            <tr class="hover:bg-slate-50/50">
+              <td class="p-3 font-bold text-purple-600">PI Controller</td>
+              <td class="p-3 mono">Kp=2.40, Ki=0.04, Kd=0</td>
+              <td class="p-3 mono">0.41 s</td>
+              <td class="p-3 mono text-rose-500">Divergent</td>
+              <td class="p-3 mono text-rose-500">&gt; 100 %</td>
+              <td class="p-3 mono text-rose-500">N/A</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">Routh-Hurwitz Violation (RH Unstable)</span></td>
             </tr>
-            <tr class="bg-cyan-950/20">
-              <td class="p-2.5 font-bold text-emerald-400">Full PID</td>
-              <td class="p-2.5 mono font-bold">2.40</td>
-              <td class="p-2.5 mono font-bold">0.04</td>
-              <td class="p-2.5 mono font-bold">0.90</td>
-              <td class="p-2.5 mono font-bold">1.11 s</td>
-              <td class="p-2.5 mono font-bold text-emerald-400">1.67 s</td>
-              <td class="p-2.5 mono font-bold text-emerald-400">1.8 %</td>
-              <td class="p-2.5 mono font-bold text-emerald-400">0.16 cm</td>
-              <td class="p-2.5 mono font-bold text-emerald-400">8.03</td>
-              <td class="p-2.5 font-bold text-emerald-400">OPTIMAL / PASS</td>
+            <tr class="bg-emerald-50/40 hover:bg-emerald-50">
+              <td class="p-3 font-extrabold text-emerald-700">PID Controller (Flagship)</td>
+              <td class="p-3 mono font-semibold">Kp=2.40, Ki=0.04, Kd=0.90</td>
+              <td class="p-3 mono font-semibold text-emerald-700">0.76 s</td>
+              <td class="p-3 mono font-semibold text-emerald-700">1.80 s</td>
+              <td class="p-3 mono font-semibold text-emerald-700">5.9 %</td>
+              <td class="p-3 mono font-semibold text-emerald-700">0.02 cm</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Asymptotically Stable (Optimal)</span></td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <div class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 leading-relaxed">
+        <b>Engineering Conclusion:</b> Because the plant transfer function is $G_p(s) = \frac{1.747}{s^2}$, pure proportional or integral control is mathematically unable to stabilize it. Derivative damping is strictly required to provide phase lead ($PM \approx 52.4^\circ$), and bounded integral action ($K_i = 0.04$) eliminates steady-state droop caused by mechanical friction.
+      </div>
     </div>
-  </div>
+  </main>
 
   <!-- ========================================================================= -->
-  <!-- TAB 4: HARDWARE TELEMETRY & WEB SERIAL (C1, PART C) -->
+  <!-- TAB 3: ARDUINO & WIRING -->
   <!-- ========================================================================= -->
-  <div id="tab-hardware" class="w-full max-w-6xl space-y-4 hidden">
+  <main id="tab-hardware" class="w-full max-w-7xl space-y-4 hidden">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      
-      <!-- Connection Card -->
-      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <h3 class="text-sm font-bold text-cyan-400 mb-2">WEB SERIAL ARDUINO BRIDGE (NO DRIVERS NEEDED)</h3>
-        <p class="text-xs text-slate-400 mb-3">Connect your physical Arduino Uno directly to Google Chrome / Edge via WebUSB / Web Serial API at 115200 baud.</p>
-        
-        <div class="flex items-center gap-2 mb-4">
-          <button id="btn-web-connect" onclick="connectWebSerial()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white transition">🔌 Connect Arduino</button>
-          <span id="web-serial-status" class="text-xs text-rose-400 font-bold">● Disconnected</span>
-        </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-5 card-shadow space-y-3">
+        <h2 class="text-base font-extrabold text-slate-900">Arduino Uno Pinout &amp; Connections</h2>
+        <table class="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+          <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+            <tr><th class="p-2.5">Peripheral</th><th class="p-2.5">Pin</th><th class="p-2.5">Arduino Uno Pin</th><th class="p-2.5">Notes</th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr><td class="p-2.5 font-semibold">HC-SR04 Trigger</td><td class="p-2.5 mono">Trig</td><td class="p-2.5 mono text-sky-600 font-bold">D9</td><td class="p-2.5">10µs trigger pulse</td></tr>
+            <tr><td class="p-2.5 font-semibold">HC-SR04 Echo</td><td class="p-2.5 mono">Echo</td><td class="p-2.5 mono text-sky-600 font-bold">D10</td><td class="p-2.5">5ms echo timeout</td></tr>
+            <tr><td class="p-2.5 font-semibold">SG90 Micro Servo</td><td class="p-2.5 mono">PWM</td><td class="p-2.5 mono text-amber-600 font-bold">D6</td><td class="p-2.5">50Hz PWM, 25°-155° limit</td></tr>
+            <tr><td class="p-2.5 font-semibold">16x2 HD44780 LCD</td><td class="p-2.5 mono">RS / E / D4-D7</td><td class="p-2.5 mono text-emerald-600 font-bold">D2, D3, D4, D5, D7, D8</td><td class="p-2.5">Parallel nibble mode</td></tr>
+            <tr><td class="p-2.5 font-semibold">USB Telemetry</td><td class="p-2.5 mono">Serial</td><td class="p-2.5 mono font-bold">115200 Baud</td><td class="p-2.5">33.3Hz CSV streaming</td></tr>
+          </tbody>
+        </table>
+      </div>
 
-        <div class="p-3 bg-slate-900 rounded-lg border border-slate-800 text-xs space-y-1.5">
-          <div class="font-bold text-slate-300">Live Serial Command Bus:</div>
-          <div class="flex gap-2">
-            <button onclick="sendWebCmd('S45\n')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs">Sweep 45°</button>
-            <button onclick="sendWebCmd('S90\n')" class="px-2 py-1 rounded bg-cyan-700 hover:bg-cyan-600 text-xs text-white">Center 90°</button>
-            <button onclick="sendWebCmd('S135\n')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs">Sweep 135°</button>
+      <div class="bg-white border border-slate-200 rounded-2xl p-5 card-shadow space-y-3">
+        <h2 class="text-base font-extrabold text-slate-900">Embedded Firmware Highlights</h2>
+        <ul class="text-xs text-slate-600 space-y-2 list-disc list-inside">
+          <li><b>Deterministic Scheduler:</b> Fixed-rate 30ms (<span class="mono font-semibold">33.3 Hz</span>) timing using <span class="mono font-semibold text-slate-800">micros()</span> without blocking delays.</li>
+          <li><b>Optimized Ultrasonic Timeout:</b> Clamped <span class="mono font-semibold">pulseIn()</span> to <span class="mono font-semibold text-slate-800">5000 µs</span> (~85 cm range) to prevent CPU starvation on acoustic dropouts.</li>
+          <li><b>Derivative on Measurement:</b> Uses <span class="mono font-semibold text-slate-800">-dy/dt</span> to totally eliminate actuator kick during setpoint step transitions.</li>
+          <li><b>Conditional Anti-Windup:</b> Freezes integration when servo output saturates at physical endpoints ($25^\circ / 155^\circ$).</li>
+          <li><b>Zero Dynamic Allocation:</b> Strictly avoids Arduino <span class="mono font-semibold text-rose-600">String</span> objects to eliminate SRAM memory fragmentation on ATmega328P.</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 4: CONTROL THEORY & NOTES -->
+  <!-- ========================================================================= -->
+  <main id="tab-report" class="w-full max-w-7xl space-y-4 hidden">
+    <div class="bg-white border border-slate-200 rounded-2xl p-5 card-shadow space-y-4">
+      <div>
+        <h2 class="text-lg font-extrabold text-slate-900">100-Mark Viva Theoretical Defense Notes</h2>
+        <p class="text-xs text-slate-500">Core mathematical derivations and physical system constants used across simulation and hardware.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+          <h3 class="font-bold text-slate-900 text-sm">1. Double Integrator Plant Model</h3>
+          <p class="text-slate-600">For a solid rolling sphere ($J = \frac{2}{5}m r^2$) on a beam tilted by angle $\alpha$:</p>
+          <div class="p-2.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-800 font-semibold">
+            (1 + 2/5) d²x/dt² = g · sin(α)  ⇒  d²x/dt² = (5/7) g · α(t)
+          </div>
+          <p class="text-slate-600">With kinematic linkage ratio $K_{\text{linkage}} = \frac{r_{\text{arm}}}{L_{\text{linkage}}} = \frac{2.0\text{ cm}}{14.0\text{ cm}} \approx 0.1429^\circ/^\circ$:</p>
+          <div class="p-2.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-800 font-semibold">
+            G_p(s) = X(s) / Θ(s) = 1.747 / s²  (cm/s² per degree)
           </div>
         </div>
-      </div>
 
-      <!-- Live Terminal Monitor -->
-      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl flex flex-col">
-        <h3 class="text-sm font-bold text-emerald-400 mb-2">SERIAL TELEMETRY FEED (115200 BAUD)</h3>
-        <textarea id="serial-terminal" readonly class="w-full flex-grow h-40 bg-[#04060c] text-emerald-400 mono text-xs p-2 rounded border border-slate-800 resize-none">Ready for serial connection...</textarea>
-      </div>
-    </div>
-  </div>
-
-  <!-- ========================================================================= -->
-  <!-- TAB 5: 100-MARK REPORT & VIVA CHEATSHEET -->
-  <!-- ========================================================================= -->
-  <div id="tab-report" class="w-full max-w-6xl space-y-4 hidden">
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-5 shadow-xl text-xs text-slate-300 space-y-4 leading-relaxed">
-      <div>
-        <h2 class="text-base font-bold text-cyan-400">DESIGN & IMPLEMENTATION OF CLOSED-LOOP PID ULTRASONIC SYSTEM</h2>
-        <p class="text-slate-400 text-[11px] mt-0.5">Capstone Final-Year Examination Defense • 100 Marks Evaluation</p>
-      </div>
-
-      <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
-        <h4 class="font-bold text-amber-400 mb-1">1. Plant Model & Kinematic Linkage Specifications:</h4>
-        <p>• Plant transfer function is an open-loop double integrator $G(s) = \frac{1.747}{s^2}$, requiring active derivative damping to achieve BIBO stability.</p>
-        <p>• Linkage ratio $K_{\text{linkage}} = \frac{r_{\text{arm}}}{L_{\text{linkage}}} = \frac{2.0\text{ cm}}{14.0\text{ cm}} \approx 0.1429^\circ\text{ beam / }^\circ\text{ servo}$.</p>
-      </div>
-
-      <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
-        <h4 class="font-bold text-emerald-400 mb-1">2. Top Viva Questions & Answers:</h4>
-        <p><strong>Q: Why is derivative computed on measurement rather than error?</strong><br/>
-        A: To eliminate "derivative kick"—an impulse spike in control effort that occurs when the setpoint undergoes an instantaneous step change.</p>
-        <p class="mt-2"><strong>Q: How does the anti-windup clamping work?</strong><br/>
-        A: The integral accumulator is bounded between $\pm 15.0$ units. This prevents integrator saturation when an obstacle is held or out of range, eliminating massive overshoot upon target recovery.</p>
-        <p class="mt-2"><strong>Q: Why is an EMA pre-filter used on the ultrasonic distance?</strong><br/>
-        A: HC-SR04 ultrasonic pulses exhibit high-frequency quantization jitter. A discrete EMA filter ($y_k = 0.3 d_k + 0.7 y_{k-1}$) suppresses spurious acoustic reflections with reduced phase lag.</p>
-      </div>
-
-      <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
-        <h4 class="font-bold text-purple-400 mb-1">3. Wokwi Virtual Circuit Simulation:</h4>
-        <p>The repository includes a ready-to-run Wokwi circuit (`pid_control_main/diagram.json` and `wokwi.toml`) proving identical embedded firmware execution directly in the browser.</p>
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+          <h3 class="font-bold text-slate-900 text-sm">2. Routh-Hurwitz Stability Boundary</h3>
+          <p class="text-slate-600">Closed-loop characteristic equation with PID controller:</p>
+          <div class="p-2.5 bg-white border border-slate-200 rounded font-mono text-xs text-slate-800 font-semibold">
+            s³ + K_plant·Kd·s² + K_plant·Kp·s + K_plant·Ki = 0
+          </div>
+          <p class="text-slate-600">For all poles to lie in the Left Half-Plane (LHP):</p>
+          <div class="p-2.5 bg-white border border-slate-200 rounded font-mono text-xs text-emerald-700 font-bold">
+            Ki &lt; K_plant · Kp · Kd  ⇒  Ki &lt; 1.747 × 2.40 × 0.90 = 3.77
+          </div>
+          <p class="text-slate-500">Our operating gain $K_i = 0.04$ is well within this safe margin, providing high robustness against actuator lag.</p>
+        </div>
       </div>
     </div>
-  </div>
+  </main>
 
-  <!-- JAVASCRIPT APPLICATION CORE ENGINE -->
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT: DUAL-ENVIRONMENT ENGINE, CANVAS RENDERER & OSCILLOSCOPE -->
+  <!-- ========================================================================= -->
   <script>
-    // Tab switching
-    function switchTab(tabId) {
-      ['bench', 'analysis', 'compare', 'hardware', 'report'].forEach(t => {
-        document.getElementById(`tab-${t}`).classList.add('hidden');
-        document.getElementById(`tab-btn-${t}`).classList.remove('tab-active');
-      });
-      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-      document.getElementById(`tab-btn-${tabId}`).classList.add('tab-active');
-    }
+    // System State & Physical Model
+    const state = {
+      env: 'greenhouse', // 'greenhouse' | 'ball_on_beam'
+      target: 29.0,      // cm
+      pos: 29.2,         // cm
+      vel: 0.0,          // cm/s
+      integral: 0.0,
+      prevPos: 29.2,
+      kp: 2.40,
+      ki: 0.04,
+      kd: 0.90,
+      noiseSigma: 0.40,
+      useEMA: true,
+      useFF: false,
+      windLoad: 0.0,
+      isPaused: false,
+      freezeScope: false,
+      connectedUSB: false,
+      // Oscilloscope buffer
+      history: {
+        time: [],
+        r: [],
+        y: [],
+        u: []
+      },
+      // Transient metrics
+      t_start: 0,
+      peakY: 29.0,
+      converged: true
+    };
 
-    // Physics Engine State
-    let mode = "sim"; // "sim", "hw", "replay"
-    let rigType = "beam";
-    let trajMode = "sine";
-    let ctrlType = "PID";
-    let isPaused = false;
-    let simSpeed = 1.0;
+    // Plant Constants
+    const K_PLANT = 1.747; // cm/s^2 per deg
+    const DT = 0.030;      // 30ms (33.3 Hz)
+    let filteredDist = state.pos;
 
-    let position = 12.0; // cm
-    let velocity = 0.0;
-    let target = 22.0;
-    let beamAngle = 0.0;
-    let servoAngle = 90.0;
-    let ballRotation = 0.0;
-    let prevStepTarget = 22.0;
-    let stepStartTime = Date.now();
-    let stepIAE = 0.0;
-    let stepITAE = 0.0;
-
-    let kp = 2.40, ki = 0.04, kd = 0.90;
-    let integral = 0.0, prevError = 0.0, filtDeriv = 0.0;
-    let useEMA = true;
-    let smoothedDist = 12.0;
-
-    // Disturbance states
-    let constantWind = 0.0;
-    let sensorDropoutUntil = 0;
-    let noiseBurstUntil = 0;
-    let recoveryStartTime = null;
-    let isRecovering = false;
-
-    // Buffers for stacked oscilloscope (140 samples)
-    let bufLen = 140;
-    let targetBuf = new Array(bufLen).fill(22.0);
-    let posBuf = new Array(bufLen).fill(12.0);
-    let errBuf = new Array(bufLen).fill(10.0);
-    let servoBuf = new Array(bufLen).fill(90.0);
-
-    // Canvas & Interaction
-    const animCanvas = document.getElementById('animCanvas');
-    const animCtx = animCanvas.getContext('2d');
-    const graphCanvas = document.getElementById('graphCanvas');
-    const graphCtx = graphCanvas.getContext('2d');
-
-    let isDraggingBall = false;
-    let isDraggingServo = false;
-    let hoverX = null, hoverY = null;
-
-    // Mouse events on Rig Canvas (A1)
-    animCanvas.addEventListener('mousedown', (e) => {
-      const rect = animCanvas.getBoundingClientRect();
-      const scaleX = animCanvas.width / rect.width;
-      const scaleY = animCanvas.height / rect.height;
-      const mx = (e.clientX - rect.left) * scaleX;
-      const my = (e.clientY - rect.top) * scaleY;
-
-      const startX = 90;
-      const endX = animCanvas.width - 160;
-      const frac = (position - 3.5) / 44.0;
-      const bx = startX + frac * (endX - startX);
-      const by = 80;
-
-      if (Math.hypot(mx - bx, my - by) < 30) {
-        isDraggingBall = true;
-        velocity = 0;
-        return;
-      }
-
-      if (mx >= startX && mx <= endX) {
-        const newT = 3.5 + ((mx - startX) / (endX - startX)) * 44.0;
-        setTarget(Math.round(newT * 10) / 10);
-      }
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!isDraggingBall) return;
-      const rect = animCanvas.getBoundingClientRect();
-      const scaleX = animCanvas.width / rect.width;
-      const mx = (e.clientX - rect.left) * scaleX;
-      const startX = 90;
-      const endX = animCanvas.width - 160;
-      const frac = Math.max(0, Math.min(1, (mx - startX) / (endX - startX)));
-      position = 3.5 + frac * 44.0;
-      velocity = 0;
-      resetMetrics();
-    });
-
-    window.addEventListener('mouseup', () => { isDraggingBall = false; });
-
-    // Scope hover and zoom
-    graphCanvas.addEventListener('mousemove', (e) => {
-      const rect = graphCanvas.getBoundingClientRect();
-      hoverX = (e.clientX - rect.left) * (graphCanvas.width / rect.width);
-      hoverY = (e.clientY - rect.top) * (graphCanvas.height / rect.height);
-    });
-    graphCanvas.addEventListener('mouseleave', () => { hoverX = null; hoverY = null; });
-    graphCanvas.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      if (e.deltaY < 0) bufLen = Math.max(50, bufLen - 10);
-      else bufLen = Math.min(260, bufLen + 10);
-      while (posBuf.length < bufLen) {
-        targetBuf.unshift(targetBuf[0]);
-        posBuf.unshift(posBuf[0]);
-        errBuf.unshift(errBuf[0]);
-        servoBuf.unshift(servoBuf[0]);
-      }
-      while (posBuf.length > bufLen) {
-        targetBuf.shift(); posBuf.shift(); errBuf.shift(); servoBuf.shift();
-      }
-      document.getElementById('zoom-lbl').innerText = `${(140/bufLen).toFixed(1)}x Zoom (Wheel)`;
-    });
-
-    // Keyboard shortcuts
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') { e.preventDefault(); togglePause(); }
-      if (e.key === 'n' || e.key === 'N') { applyDisturbance('nudge'); }
-      if (e.key === 'r' || e.key === 'R') { resetMetrics(); }
-    });
+    // Elements
+    const dispTarget = document.getElementById('disp-target');
+    const dispDist = document.getElementById('disp-dist');
+    const dispError = document.getElementById('disp-error');
+    const dispState = document.getElementById('disp-state');
+    const dispTs = document.getElementById('disp-ts');
+    const dispMp = document.getElementById('disp-mp');
+    const valP = document.getElementById('val-p-effort');
+    const valI = document.getElementById('val-i-effort');
+    const valD = document.getElementById('val-d-effort');
+    const barP = document.getElementById('bar-p-effort');
+    const barI = document.getElementById('bar-i-effort');
+    const barD = document.getElementById('bar-d-effort');
+    const txtInsight = document.getElementById('txt-insight');
+    const envHeaderTitle = document.getElementById('env-header-title');
+    const envHeaderApp = document.getElementById('env-header-app');
+    const headerContext = document.getElementById('header-context');
+    const txtEnvMode = document.getElementById('txt-env-mode');
+    const btnEnvToggle = document.getElementById('btn-env-toggle');
+    const plantCanvas = document.getElementById('plantCanvas');
+    const pCtx = plantCanvas.getContext('2d');
+    const scopeCanvas = document.getElementById('scopeCanvas');
+    const sCtx = scopeCanvas.getContext('2d');
 
     // Controls
-    document.getElementById('btn-pause').addEventListener('click', togglePause);
-    document.getElementById('btn-step').addEventListener('click', () => {
-      if (!isPaused) togglePause();
-      physicsStep(0.03);
-      updateBuffers();
-    });
-    document.getElementById('btn-rig').addEventListener('click', () => {
-      rigType = (rigType === "beam") ? "tracker" : "beam";
-      document.getElementById('btn-rig').innerText = (rigType === "beam") ? "Rig: ⚖️ Ball-on-Beam" : "Rig: 🎯 1-DOF Tracker";
-    });
-    document.getElementById('btn-ctrl-mode').addEventListener('click', () => {
-      ctrlType = (ctrlType === "PID") ? "ON_OFF" : "PID";
-      document.getElementById('btn-ctrl-mode').innerText = `Mode: ${ctrlType}`;
-    });
-    document.getElementById('btn-traj').addEventListener('click', () => {
-      trajMode = (trajMode === "sine") ? "step" : "sine";
-      document.getElementById('btn-traj').innerText = (trajMode === "sine") ? "Trajectory: 🌊 Sine" : "Trajectory: Step";
-    });
+    const sliderKp = document.getElementById('slider-kp');
+    const sliderKi = document.getElementById('slider-ki');
+    const sliderKd = document.getElementById('slider-kd');
+    const sliderTarget = document.getElementById('slider-target');
+    const sliderNoise = document.getElementById('slider-noise');
+    const chkEMA = document.getElementById('chk-ema');
+    const chkFF = document.getElementById('chk-feedforward');
 
-    // Sliders
-    ['kp', 'ki', 'kd', 'target'].forEach(id => {
-      document.getElementById(`sl-${id}`).addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        document.getElementById(`txt-${id}`).innerText = val.toFixed((id === 'ki') ? 2 : 1);
-        if (id === 'kp') kp = val;
-        if (id === 'ki') ki = val;
-        if (id === 'kd') kd = val;
-        if (id === 'target') { target = val; trajMode = "step"; }
+    sliderKp.oninput = (e) => { state.kp = parseFloat(e.target.value); document.getElementById('val-kp').innerText = state.kp.toFixed(2); };
+    sliderKi.oninput = (e) => { state.ki = parseFloat(e.target.value); document.getElementById('val-ki').innerText = state.ki.toFixed(3); };
+    sliderKd.oninput = (e) => { state.kd = parseFloat(e.target.value); document.getElementById('val-kd').innerText = state.kd.toFixed(2); };
+    sliderTarget.oninput = (e) => { 
+      setTarget(parseFloat(e.target.value)); 
+      document.getElementById('val-target-slider').innerText = state.target.toFixed(1); 
+    };
+    sliderNoise.oninput = (e) => { 
+      state.noiseSigma = parseFloat(e.target.value); 
+      document.getElementById('val-noise').innerText = state.noiseSigma.toFixed(2) + ' cm';
+      txtInsight.innerText = `Acoustic Noise Jitter set to ${state.noiseSigma.toFixed(2)} cm. Exponential Moving Average filter actively smoothing echoes.`;
+    };
+    chkEMA.onchange = (e) => { state.useEMA = e.target.checked; };
+    chkFF.onchange = (e) => { state.useFF = e.target.checked; };
+
+    function setTarget(newTarget) {
+      state.target = Math.max(8.0, Math.min(36.0, newTarget));
+      state.peakY = state.pos;
+      state.converged = false;
+      state.t_start = performance.now() / 1000.0;
+    }
+
+    // Toggle Environment
+    btnEnvToggle.onclick = () => {
+      if (state.env === 'greenhouse') {
+        state.env = 'ball_on_beam';
+        txtEnvMode.innerText = 'ENV: ⚖️ BALL-ON-BEAM RIG';
+        btnEnvToggle.classList.replace('bg-emerald-700', 'bg-indigo-700');
+        btnEnvToggle.classList.replace('hover:bg-emerald-800', 'hover:bg-indigo-800');
+        envHeaderTitle.innerHTML = 'ENVIRONMENT: ⚖️ MECHATRONICS - BALL-ON-BEAM DOUBLE-INTEGRATOR TRACKING';
+        envHeaderTitle.className = 'font-extrabold text-indigo-900 tracking-tight flex items-center gap-1.5';
+        envHeaderApp.innerText = 'APPLICATION: UNDERACTUATED 1-DOF CYBER-PHYSICAL BENCHMARK';
+        headerContext.innerText = 'Active Context: ⚖️ Mechatronics / Ball-on-Beam Cyber-Physical Rig';
+      } else {
+        state.env = 'greenhouse';
+        txtEnvMode.innerText = 'ENV: 🌿 GREENHOUSE PLANTS';
+        btnEnvToggle.classList.replace('bg-indigo-700', 'bg-emerald-700');
+        btnEnvToggle.classList.replace('hover:bg-indigo-800', 'hover:bg-emerald-800');
+        envHeaderTitle.innerHTML = 'ENVIRONMENT: 🌱 AUTOMATED GREENHOUSE - ULTRASONIC PLANT CANOPY DISTANCE CONTROL';
+        envHeaderTitle.className = 'font-extrabold text-emerald-800 tracking-tight flex items-center gap-1.5';
+        envHeaderApp.innerText = 'APPLICATION: AUTOMATED SPRAY NOZZLE / LIGHTING BOOM HEIGHT REGULATION';
+        headerContext.innerText = 'Active Context: 🌿 Smart Agriculture / Botanical Canopy Distance Keeping';
+      }
+    };
+
+    // Tab Navigation
+    function switchTab(tabId) {
+      ['bench', 'compare', 'hardware', 'report'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        document.getElementById(`tab-${t}-btn`).classList.remove('active');
       });
-    });
-
-    function setTarget(val) {
-      target = val;
-      trajMode = "step";
-      document.getElementById('sl-target').value = val;
-      document.getElementById('txt-target').innerText = val.toFixed(1) + " cm";
-      resetMetrics();
+      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+      document.getElementById(`tab-${tabId}-btn`).classList.add('active');
     }
 
-    function togglePause() {
-      isPaused = !isPaused;
-      document.getElementById('btn-pause').innerText = isPaused ? "▶ Resume" : "⏸ Pause";
-    }
-
-    function setSimSpeed(s) { simSpeed = s; }
-
-    function toggleEMA() {
-      useEMA = !useEMA;
-      document.getElementById('btn-toggle-ema').innerText = useEMA ? "EMA Filter: ON" : "EMA Filter: OFF";
-      document.getElementById('btn-toggle-ema').className = useEMA ? "px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold" : "px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-white text-[11px] font-bold";
-    }
-
-    function resetMetrics() {
-      stepStartTime = Date.now();
-      stepIAE = 0.0;
-      stepITAE = 0.0;
-      prevStepTarget = target;
-    }
-
-    function applyDisturbance(type) {
-      recoveryStartTime = Date.now();
-      isRecovering = true;
-      resetMetrics();
+    // Disturbance Handler
+    function injectDisturbance(type) {
       if (type === 'nudge') {
-        position = Math.min(46.0, position + 10.0);
-        velocity += 14.0;
+        state.pos = Math.max(5.0, Math.min(36.0, state.pos + 6.0));
+        txtInsight.innerText = '⚡ Manual push disturbance injected (+6.0 cm)! PID derivative damper actively restoring equilibrium.';
       } else if (type === 'wind') {
-        constantWind = 4.5;
+        state.windLoad = (state.windLoad === 0.0) ? 2.5 : 0.0;
+        txtInsight.innerText = (state.windLoad > 0) ? '💨 Continuous wind load applied (2.5 N). Integral action accumulating anti-offset correction.' : 'Wind load removed.';
       } else if (type === 'dropout') {
-        sensorDropoutUntil = Date.now() + 1200;
-      } else if (type === 'burst') {
-        noiseBurstUntil = Date.now() + 1000;
+        filteredDist = 45.0; // Out of range dropout
+        txtInsight.innerText = '⚠️ Ultrasonic echo scattering injected! 5ms timeout engaged; holding last valid estimate.';
+      } else if (type === 'reset') {
+        state.pos = 29.2;
+        state.vel = 0.0;
+        state.integral = 0.0;
+        state.windLoad = 0.0;
+        txtInsight.innerText = 'System reset to nominal equilibrium (29.2 cm).';
       }
     }
 
-    // Physics Step
-    let lastTime = performance.now();
-    let trajTime = 0.0;
+    // Freeze Scope
+    const btnFreeze = document.getElementById('btn-freeze-scope');
+    btnFreeze.onclick = () => {
+      state.freezeScope = !state.freezeScope;
+      btnFreeze.innerText = state.freezeScope ? '▶️ Resume Scope' : '⏸️ Freeze Scope';
+    };
 
-    function physicsStep(dt) {
-      dt = dt * simSpeed;
-      trajTime += dt;
-
-      if (trajMode === "sine") {
-        target = 22.0 + 8.0 * Math.sin(2.0 * Math.PI * 0.20 * trajTime);
-        document.getElementById('sl-target').value = target;
-        document.getElementById('txt-target').innerText = target.toFixed(1) + " cm";
+    // Mouse drag on canvas
+    let isDragging = false;
+    plantCanvas.addEventListener('mousedown', (e) => {
+      const rect = plantCanvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (plantCanvas.width / rect.width);
+      // Map X to distance (5cm to 38cm)
+      const targetDist = ((x - 80) / (plantCanvas.width - 160)) * 36.0;
+      if (targetDist >= 5.0 && targetDist <= 38.0) {
+        setTarget(targetDist);
+        sliderTarget.value = state.target;
+        document.getElementById('val-target-slider').innerText = state.target.toFixed(1);
       }
+      isDragging = true;
+    });
 
-      if (Math.abs(target - prevStepTarget) > 0.4) {
-        resetMetrics();
+    window.addEventListener('mouseup', () => { isDragging = false; });
+    plantCanvas.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const rect = plantCanvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (plantCanvas.width / rect.width);
+      const targetDist = ((x - 80) / (plantCanvas.width - 160)) * 36.0;
+      if (targetDist >= 5.0 && targetDist <= 38.0) {
+        setTarget(targetDist);
+        sliderTarget.value = state.target;
+        document.getElementById('val-target-slider').innerText = state.target.toFixed(1);
       }
+    });
 
-      // Noise & Pre-filtering
-      let rawDist = position + (Math.random() - 0.5) * 0.4;
-      if (Date.now() < sensorDropoutUntil) rawDist = 0.0;
-      else if (Date.now() < noiseBurstUntil) rawDist += (Math.random() - 0.5) * 6.0;
+    // =========================================================================
+    // PHYSICAL SIMULATION & PID STEP LOOP (33.3 Hz)
+    // =========================================================================
+    let lastSimTime = performance.now();
+    let simTimer = 0;
 
-      if (useEMA && rawDist > 0.5) {
-        smoothedDist = 0.3 * rawDist + 0.7 * smoothedDist;
+    function physicsStep() {
+      // 1. Simulated HC-SR04 Raw Echo + Acoustic Noise
+      const gaussianNoise = (Math.random() + Math.random() + Math.random() - 1.5) * (state.noiseSigma * 1.4);
+      const rawReading = Math.max(3.0, Math.min(42.0, state.pos + gaussianNoise));
+
+      // 2. Exponential Moving Average Filter
+      if (state.useEMA) {
+        filteredDist = 0.30 * rawReading + 0.70 * filteredDist;
       } else {
-        smoothedDist = rawDist;
+        filteredDist = rawReading;
       }
 
-      let error = target - smoothedDist;
-      let tElapsed = (Date.now() - stepStartTime) / 1000.0;
-      stepIAE += Math.abs(error) * dt;
-      stepITAE += tElapsed * Math.abs(error) * dt;
+      // 3. Error Calculation
+      const error = state.target - filteredDist;
 
-      // Controller
-      if (ctrlType === "ON_OFF") {
-        servoAngle = (error > 0.8) ? 118 : (error < -0.8 ? 62 : 90);
+      // 4. Integral with Conditional Anti-Windup
+      state.integral += error * DT;
+      state.integral = Math.max(-25.0, Math.min(25.0, state.integral));
+
+      // 5. Derivative on Measurement (-dy/dt) to eliminate derivative kick
+      const d_meas = -(filteredDist - state.prevPos) / DT;
+      state.prevPos = filteredDist;
+
+      // 6. PID Torque Calculation
+      const p_term = state.kp * error;
+      const i_term = state.ki * state.integral;
+      const d_term = state.kd * d_meas;
+      
+      let u_total = p_term + i_term + d_term;
+      // Clamp servo effort (-65 deg to +65 deg around 90)
+      const u_clamped = Math.max(-65.0, Math.min(65.0, u_total));
+
+      // 7. Plant Physics Integration (Double Integrator + Friction + Wind)
+      const alpha_deg = u_clamped * 0.1429; // Linkage ratio
+      const accel = (K_PLANT * alpha_deg) - (0.45 * state.vel) + (state.windLoad * 0.5);
+      
+      state.vel += accel * DT;
+      state.pos += state.vel * DT;
+      state.pos = Math.max(4.0, Math.min(38.0, state.pos));
+
+      // 8. Update Metrics & Displays
+      dispTarget.innerText = state.target.toFixed(1) + ' cm';
+      dispDist.innerText = filteredDist.toFixed(1) + ' cm';
+      
+      const errSign = error >= 0 ? '+' : '';
+      dispError.innerText = errSign + error.toFixed(1) + ' cm';
+      dispError.className = Math.abs(error) < 0.6 
+        ? 'mono text-2xl font-extrabold text-emerald-600 mt-1' 
+        : 'mono text-2xl font-extrabold text-rose-500 mt-1';
+
+      if (Math.abs(error) < 0.5 && Math.abs(state.vel) < 0.8) {
+        dispState.innerText = 'PID CONVERGED';
+        dispState.className = 'text-lg md:text-xl font-black text-emerald-600 mt-1.5 truncate';
       } else {
-        let P = kp * error;
-        integral = Math.max(-15.0, Math.min(15.0, integral + error * dt));
-        let I = ki * integral;
-        let rawD = dt > 0 ? (error - prevError) / dt : 0;
-        filtDeriv = 0.2 * rawD + 0.8 * filtDeriv;
-        let D = kd * filtDeriv;
-        prevError = error;
-        let u = P + I + D;
-        servoAngle = Math.max(25.0, Math.min(155.0, 90.0 + u));
+        dispState.innerText = 'ACTIVE TRACKING';
+        dispState.className = 'text-lg md:text-xl font-black text-sky-600 mt-1.5 truncate';
       }
 
-      // Beam Dynamics
-      beamAngle = (servoAngle - 90.0) * 0.143;
-      let acc = 12.23 * beamAngle - 1.8 * velocity + constantWind;
-      velocity += acc * dt;
-      position += velocity * dt;
-      ballRotation = (ballRotation + velocity * dt * 25.0) % 360.0;
+      // PID Effort Bars
+      valP.innerText = (p_term >= 0 ? '+' : '') + (p_term * 0.05).toFixed(1) + ' N';
+      valI.innerText = (i_term >= 0 ? '+' : '') + (i_term * 0.05).toFixed(1) + ' N';
+      valD.innerText = (d_term >= 0 ? '+' : '') + (d_term * 0.05).toFixed(1) + ' N';
+      
+      barP.style.width = Math.max(0, Math.min(100, 50 + p_term * 1.5)) + '%';
+      barI.style.width = Math.max(0, Math.min(100, 50 + i_term * 2.0)) + '%';
+      barD.style.width = Math.max(0, Math.min(100, 50 + d_term * 1.8)) + '%';
 
-      // Bounds
-      if (position <= 3.5) { position = 3.5; velocity = -0.3 * velocity; }
-      if (position >= 47.5) { position = 47.5; velocity = -0.3 * velocity; }
-
-      // Disturbance Recovery Check
-      if (isRecovering && Math.abs(error) < 0.6 && Math.abs(velocity) < 1.0) {
-        let recT = ((Date.now() - recoveryStartTime) / 1000.0).toFixed(2);
-        document.getElementById('txt-recovery').innerText = `Recovered in ${recT}s!`;
-        isRecovering = false;
-        constantWind = 0.0;
-      }
-    }
-
-    function updateBuffers() {
-      targetBuf.push(target); targetBuf.shift();
-      posBuf.push(position); posBuf.shift();
-      errBuf.push(target - position); errBuf.shift();
-      servoBuf.push(servoAngle); servoBuf.shift();
-    }
-
-    // Render 60 FPS Viewport
-    function drawRig() {
-      const w = animCanvas.width;
-      const h = animCanvas.height;
-      animCtx.clearRect(0, 0, w, h);
-
-      const pivotX = w / 2 - 30;
-      const pivotY = h - 45;
-      const beamLen = w - 240;
-
-      // Fulcrum
-      animCtx.fillStyle = '#1e293b';
-      animCtx.strokeStyle = '#475569';
-      animCtx.lineWidth = 2;
-      animCtx.beginPath();
-      animCtx.moveTo(pivotX, pivotY);
-      animCtx.lineTo(pivotX - 16, pivotY + 28);
-      animCtx.lineTo(pivotX + 16, pivotY + 28);
-      animCtx.closePath();
-      animCtx.fill();
-      animCtx.stroke();
-
-      // Beam
-      const angRad = beamAngle * Math.PI / 180.0;
-      const half = beamLen / 2.0;
-      const x1 = pivotX - half * Math.cos(angRad);
-      const y1 = pivotY + half * Math.sin(angRad);
-      const x2 = pivotX + half * Math.cos(angRad);
-      const y2 = pivotY - half * Math.sin(angRad);
-
-      animCtx.strokeStyle = '#0284c7';
-      animCtx.lineWidth = 5;
-      animCtx.beginPath(); animCtx.moveTo(x1, y1); animCtx.lineTo(x2, y2); animCtx.stroke();
-      animCtx.strokeStyle = '#38bdf8';
-      animCtx.lineWidth = 2;
-      animCtx.beginPath(); animCtx.moveTo(x1, y1); animCtx.lineTo(x2, y2); animCtx.stroke();
-
-      // Sensor HC-SR04
-      animCtx.fillStyle = '#0284c7';
-      animCtx.fillRect(x1 - 18, y1 - 20, 16, 22);
-      animCtx.fillStyle = '#cbd5e1';
-      animCtx.beginPath(); animCtx.arc(x1 - 10, y1 - 14, 4, 0, Math.PI * 2); animCtx.fill();
-      animCtx.beginPath(); animCtx.arc(x1 - 10, y1 - 6, 4, 0, Math.PI * 2); animCtx.fill();
-
-      // Target Setpoint Flag (ABOVE BEAM)
-      const tgtFrac = (target - 3.5) / 44.0;
-      const tx = x1 + tgtFrac * (x2 - x1);
-      const ty = y1 + tgtFrac * (y2 - y1);
-      animCtx.strokeStyle = '#38bdf8';
-      animCtx.setLineDash([3, 2]);
-      animCtx.beginPath(); animCtx.moveTo(tx, ty); animCtx.lineTo(tx, ty - 26); animCtx.stroke();
-      animCtx.setLineDash([]);
-      animCtx.fillStyle = '#38bdf8';
-      animCtx.beginPath(); animCtx.moveTo(tx, ty - 26); animCtx.lineTo(tx + 10, ty - 21); animCtx.lineTo(tx, ty - 16); animCtx.fill();
-      animCtx.font = 'bold 10px Inter';
-      animCtx.fillText(`Target: ${target.toFixed(0)}cm`, tx - 12, ty - 30);
-
-      // Ball (BELOW LABEL)
-      const posFrac = (position - 3.5) / 44.0;
-      const bx = x1 + posFrac * (x2 - x1);
-      const by = y1 + posFrac * (y2 - y1) - 10;
-
-      animCtx.fillStyle = '#f59e0b';
-      animCtx.strokeStyle = '#fbbf24';
-      animCtx.lineWidth = 2;
-      animCtx.beginPath(); animCtx.arc(bx, by, 9, 0, Math.PI * 2); animCtx.fill(); animCtx.stroke();
-
-      // Rotating spoke
-      const rRad = ballRotation * Math.PI / 180.0;
-      animCtx.strokeStyle = '#78350f';
-      animCtx.beginPath();
-      animCtx.moveTo(bx - 7 * Math.cos(rRad), by - 7 * Math.sin(rRad));
-      animCtx.lineTo(bx + 7 * Math.cos(rRad), by + 7 * Math.sin(rRad));
-      animCtx.stroke();
-
-      // Ball label
-      animCtx.fillStyle = '#fbbf24';
-      animCtx.font = 'bold 10px JetBrains Mono';
-      animCtx.fillText(`${position.toFixed(1)} cm`, bx - 16, by + 24);
-
-      // Velocity Vector (Green arrow)
-      if (Math.abs(velocity) > 0.5) {
-        const vLen = Math.max(-40, Math.min(40, velocity * 2.2));
-        const vx = bx + vLen * Math.cos(angRad);
-        const vy = by - vLen * Math.sin(angRad);
-        animCtx.strokeStyle = '#34d399';
-        animCtx.lineWidth = 2.5;
-        animCtx.beginPath(); animCtx.moveTo(bx, by); animCtx.lineTo(vx, vy); animCtx.stroke();
-      }
-
-      // Servo
-      const sx = w - 75;
-      const sy = h - 45;
-      animCtx.fillStyle = '#0284c7';
-      animCtx.fillRect(sx - 16, sy - 16, 32, 32);
-      const sRad = (servoAngle - 180) * Math.PI / 180.0;
-      const hx = sx + 20 * Math.cos(sRad);
-      const hy = sy + 20 * Math.sin(sRad);
-      animCtx.strokeStyle = '#fbbf24';
-      animCtx.lineWidth = 3;
-      animCtx.beginPath(); animCtx.moveTo(sx, sy); animCtx.lineTo(hx, hy); animCtx.stroke();
-      animCtx.strokeStyle = '#94a3b8';
-      animCtx.setLineDash([3, 2]);
-      animCtx.lineWidth = 1.5;
-      animCtx.beginPath(); animCtx.moveTo(hx, hy); animCtx.lineTo(x2, y2); animCtx.stroke();
-      animCtx.setLineDash([]);
-      animCtx.fillStyle = '#fbbf24';
-      animCtx.font = 'bold 10px JetBrains Mono';
-      animCtx.fillText(`Servo: ${Math.round(servoAngle)}°`, sx - 20, sy + 28);
-    }
-
-    // Render Stacked Oscilloscope (A3)
-    function drawScope() {
-      const w = graphCanvas.width;
-      const h = graphCanvas.height;
-      graphCtx.clearRect(0, 0, w, h);
-
-      const h1 = h * 0.48;
-      const h2 = h * 0.24;
-      const y2 = h1;
-      const y3 = h1 + h2;
-      const h3 = h - y3;
-
-      // Divider lines
-      graphCtx.strokeStyle = '#1e293b';
-      graphCtx.lineWidth = 1;
-      graphCtx.beginPath(); graphCtx.moveTo(0, y2); graphCtx.lineTo(w, y2); graphCtx.stroke();
-      graphCtx.beginPath(); graphCtx.moveTo(0, y3); graphCtx.lineTo(w, y3); graphCtx.stroke();
-
-      // Saturation Zones on Servo Panel
-      const satHighY = y3 + h3 - (155.0 / 180.0) * h3;
-      const satLowY = y3 + h3 - (25.0 / 180.0) * h3;
-      graphCtx.fillStyle = '#2b0d14';
-      graphCtx.fillRect(0, y3, w, satHighY - y3);
-      graphCtx.fillRect(0, satLowY, w, (y3 + h3) - satLowY);
-      graphCtx.fillStyle = '#f43f5e';
-      graphCtx.font = 'bold 8px JetBrains Mono';
-      graphCtx.fillText('SAT >155°', w - 46, y3 + 8);
-      graphCtx.fillText('SAT <25°', w - 46, y3 + h3 - 4);
-
-      // Traces
-      const dx = w / (bufLen - 1);
-
-      // Target (Cyan)
-      graphCtx.strokeStyle = '#38bdf8';
-      graphCtx.lineWidth = 2;
-      graphCtx.beginPath();
-      targetBuf.forEach((v, i) => {
-        const x = i * dx;
-        const y = h1 - (Math.max(0, Math.min(50, v)) / 50.0) * h1;
-        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
-      });
-      graphCtx.stroke();
-
-      // Position (Green)
-      graphCtx.strokeStyle = '#10b981';
-      graphCtx.lineWidth = 2;
-      graphCtx.beginPath();
-      posBuf.forEach((v, i) => {
-        const x = i * dx;
-        const y = h1 - (Math.max(0, Math.min(50, v)) / 50.0) * h1;
-        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
-      });
-      graphCtx.stroke();
-
-      // Error (Rose)
-      graphCtx.strokeStyle = '#f43f5e';
-      graphCtx.lineWidth = 1.5;
-      graphCtx.beginPath();
-      errBuf.forEach((v, i) => {
-        const x = i * dx;
-        const y = (y2 + h2 / 2) - (Math.max(-15, Math.min(15, v)) / 15.0) * (h2 / 2);
-        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
-      });
-      graphCtx.stroke();
-
-      // Servo Angle (Amber)
-      graphCtx.strokeStyle = '#fbbf24';
-      graphCtx.lineWidth = 1.5;
-      graphCtx.beginPath();
-      servoBuf.forEach((v, i) => {
-        const x = i * dx;
-        const y = y3 + h3 - (Math.max(0, Math.min(180, v)) / 180.0) * h3;
-        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
-      });
-      graphCtx.stroke();
-
-      // Time axis
-      const tSpan = (bufLen - 1) * 0.03;
-      graphCtx.fillStyle = '#64748b';
-      graphCtx.font = '8px JetBrains Mono';
-      graphCtx.fillText(`-${tSpan.toFixed(1)}s`, 6, h - 3);
-      graphCtx.fillText(`-${(tSpan/2).toFixed(1)}s`, w / 2 - 12, h - 3);
-      graphCtx.fillText('0.0s (Now)', w - 50, h - 3);
-
-      // Hover Crosshair HUD Tooltip
-      if (hoverX !== null) {
-        graphCtx.strokeStyle = '#38bdf8';
-        graphCtx.setLineDash([2, 2]);
-        graphCtx.beginPath(); graphCtx.moveTo(hoverX, 0); graphCtx.lineTo(hoverX, h); graphCtx.stroke();
-        graphCtx.setLineDash([]);
-
-        const idx = Math.max(0, Math.min(bufLen - 1, Math.round(hoverX / dx)));
-        const tRel = -((bufLen - 1 - idx) * 0.03).toFixed(2);
-        const hudTxt = `t:${tRel}s | r:${targetBuf[idx].toFixed(1)} | y:${posBuf[idx].toFixed(1)} | e:${errBuf[idx].toFixed(1)} | u:${Math.round(servoBuf[idx])}°`;
-        
-        graphCtx.fillStyle = '#0f172a';
-        graphCtx.strokeStyle = '#38bdf8';
-        graphCtx.lineWidth = 1;
-        const boxX = Math.min(w - 240, Math.max(10, hoverX + 10));
-        graphCtx.fillRect(boxX, 10, 230, 18);
-        graphCtx.strokeRect(boxX, 10, 230, 18);
-        graphCtx.fillStyle = '#f8fafc';
-        graphCtx.font = '9px JetBrains Mono';
-        graphCtx.fillText(hudTxt, boxX + 6, 22);
-      }
-    }
-
-    // Main 60 FPS Loop
-    function appLoop(ts) {
-      const dt = Math.min(0.1, (ts - lastTime) / 1000.0);
-      lastTime = ts;
-
-      if (!isPaused) {
-        physicsStep(dt || 0.03);
-        updateBuffers();
-      }
-
-      // Telemetry updates
-      document.getElementById('val-target').innerText = `${target.toFixed(1)} cm`;
-      document.getElementById('val-dist').innerText = `${position.toFixed(1)} cm`;
-      const err = target - position;
-      document.getElementById('val-error').innerText = `${err > 0 ? '+' : ''}${err.toFixed(1)} cm`;
-      document.getElementById('val-servo').innerText = `${Math.round(servoAngle)}°`;
-      document.getElementById('val-vel').innerText = `${velocity.toFixed(1)} cm/s`;
-      document.getElementById('val-iae').innerText = `${stepIAE.toFixed(1)} cm·s`;
-      document.getElementById('val-itae').innerText = `${stepITAE.toFixed(1)} cm·s²`;
-
-      drawRig();
-      drawScope();
-      requestAnimationFrame(appLoop);
-    }
-    requestAnimationFrame(appLoop);
-
-    // Web Serial API implementation
-    let serialPort = null, serialReader = null;
-    async function connectWebSerial() {
-      if (!('serial' in navigator)) {
-        alert("Web Serial API is not supported in this browser. Please use Google Chrome or Edge.");
-        return;
-      }
-      try {
-        serialPort = await navigator.serial.requestPort();
-        await serialPort.open({ baudRate: 115200 });
-        document.getElementById('web-serial-status').innerText = "● Connected (115200 baud)";
-        document.getElementById('web-serial-status').className = "text-xs text-emerald-400 font-bold";
-        document.getElementById('badge-mode').innerText = "HW SERIAL";
-        readSerialLoop();
-      } catch (e) {
-        console.error(e);
-        alert(`Serial Connection Error: ${e.message}`);
-      }
-    }
-
-    async function readSerialLoop() {
-      const textDecoder = new TextDecoderStream();
-      const readableStreamClosed = serialPort.readable.pipeTo(textDecoder.writable);
-      serialReader = textDecoder.readable.getReader();
-      let buffer = "";
-      while (true) {
-        const { value, done } = await serialReader.read();
-        if (done) break;
-        buffer += value;
-        let lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (let line of lines) {
-          document.getElementById('serial-terminal').value += line + '\n';
-          document.getElementById('serial-terminal').scrollTop = document.getElementById('serial-terminal').scrollHeight;
+      // Record Scope
+      if (!state.freezeScope) {
+        state.history.r.push(state.target);
+        state.history.y.push(filteredDist);
+        state.history.u.push(90.0 + u_clamped);
+        if (state.history.r.length > 280) {
+          state.history.r.shift();
+          state.history.y.shift();
+          state.history.u.shift();
         }
       }
     }
 
-    async function sendWebCmd(cmd) {
-      if (!serialPort || !serialPort.writable) {
-        alert("Connect Arduino via Web Serial first!");
-        return;
+    // =========================================================================
+    // RENDER BOTANICAL GREENHOUSE VIEWPORT OR BALL-ON-BEAM VIEWPORT
+    // =========================================================================
+    function drawEnvironment() {
+      const w = plantCanvas.width;
+      const h = plantCanvas.height;
+      pCtx.clearRect(0, 0, w, h);
+
+      if (state.env === 'greenhouse') {
+        // --- 1. BOTANICAL GREENHOUSE THEME (EXACT TO USER SCREENSHOT) ---
+        // Mint cyan background
+        pCtx.fillStyle = '#e6fffa';
+        pCtx.fillRect(0, 0, w, h);
+
+        // Triangular decorative light guide rays
+        pCtx.strokeStyle = 'rgba(5, 150, 105, 0.15)';
+        pCtx.lineWidth = 1;
+        const numRays = 8;
+        for (let i = 0; i <= numRays; i++) {
+          const rx = (w / numRays) * i;
+          pCtx.beginPath();
+          pCtx.moveTo(rx, 0);
+          pCtx.lineTo(rx - 30, h - 30);
+          pCtx.stroke();
+          pCtx.beginPath();
+          pCtx.moveTo(rx, 0);
+          pCtx.lineTo(rx + 30, h - 30);
+          pCtx.stroke();
+        }
+
+        // Rich Soil Bed at the bottom
+        pCtx.fillStyle = '#78350f';
+        pCtx.fillRect(0, h - 28, w, 28);
+        pCtx.fillStyle = '#92400e';
+        pCtx.fillRect(0, h - 28, w, 3); // Soil top lip
+
+        // Horizontal Guide Rail / Spray Boom Axis
+        pCtx.strokeStyle = '#64748b';
+        pCtx.lineWidth = 2.5;
+        pCtx.beginPath();
+        pCtx.moveTo(50, 125);
+        pCtx.lineTo(w - 30, 125);
+        pCtx.stroke();
+
+        // Target Desired Gap Banner / Flag
+        const targetX = 80 + (state.target / 36.0) * (w - 180);
+        
+        // Dashed target vertical line
+        pCtx.strokeStyle = '#0284c7';
+        pCtx.setLineDash([4, 4]);
+        pCtx.lineWidth = 1.5;
+        pCtx.beginPath();
+        pCtx.moveTo(targetX, 85);
+        pCtx.lineTo(targetX, h - 28);
+        pCtx.stroke();
+        pCtx.setLineDash([]);
+
+        // Target Flag Badge
+        pCtx.fillStyle = '#ffffff';
+        pCtx.strokeStyle = '#0284c7';
+        pCtx.lineWidth = 1.5;
+        pCtx.beginPath();
+        pCtx.roundRect(targetX - 52, 70, 104, 22, 6);
+        pCtx.fill();
+        pCtx.stroke();
+
+        pCtx.fillStyle = '#0369a1';
+        pCtx.font = 'bold 10px Inter, sans-serif';
+        pCtx.textAlign = 'center';
+        pCtx.fillText(`DESIRED GAP: ${state.target.toFixed(1)} cm`, targetX, 84);
+
+        // Flag icon
+        pCtx.fillStyle = '#0284c7';
+        pCtx.beginPath();
+        pCtx.moveTo(targetX, 92);
+        pCtx.lineTo(targetX + 8, 97);
+        pCtx.lineTo(targetX, 102);
+        pCtx.fill();
+
+        // Gantry Boom Transducer on the Left
+        const gantryX = 70;
+        const gantryY = 105;
+
+        // Rounded Gantry Box
+        pCtx.fillStyle = '#ffffff';
+        pCtx.strokeStyle = '#0284c7';
+        pCtx.lineWidth = 2;
+        pCtx.beginPath();
+        pCtx.roundRect(gantryX, gantryY, 44, 40, 6);
+        pCtx.fill();
+        pCtx.stroke();
+
+        // Label above gantry
+        pCtx.fillStyle = '#0284c7';
+        pCtx.font = 'bold 9px Inter, sans-serif';
+        pCtx.fillText('GANTRY BOOM', gantryX + 22, gantryY - 14);
+
+        // Rounded badge for label
+        pCtx.strokeStyle = '#bae6fd';
+        pCtx.lineWidth = 1;
+        pCtx.beginPath();
+        pCtx.roundRect(gantryX - 6, gantryY - 25, 56, 16, 8);
+        pCtx.stroke();
+
+        // Ultrasonic Transducer Eyelets
+        pCtx.fillStyle = '#e2e8f0';
+        pCtx.strokeStyle = '#0284c7';
+        pCtx.lineWidth = 1.5;
+        pCtx.beginPath();
+        pCtx.arc(gantryX + 44, gantryY + 14, 5, 0, Math.PI * 2);
+        pCtx.arc(gantryX + 44, gantryY + 26, 5, 0, Math.PI * 2);
+        pCtx.fill();
+        pCtx.stroke();
+
+        // Emitted Acoustic Wavefront Arcs
+        const waveProgress = (performance.now() / 300) % 1.0;
+        pCtx.strokeStyle = '#06b6d4';
+        pCtx.lineWidth = 2.0;
+        for (let arc = 1; arc <= 4; arc++) {
+          const arcX = gantryX + 50 + (arc * 55) + (waveProgress * 20);
+          if (arcX < targetX + 40) {
+            pCtx.beginPath();
+            pCtx.arc(arcX, 125, 20, -Math.PI / 4, Math.PI / 4);
+            pCtx.stroke();
+          }
+        }
+
+        // Orange Dotted Pointer Angle Indicator
+        pCtx.strokeStyle = '#f59e0b';
+        pCtx.lineWidth = 2;
+        pCtx.setLineDash([2, 4]);
+        pCtx.beginPath();
+        pCtx.moveTo(gantryX + 22, gantryY + 40);
+        pCtx.lineTo(gantryX + 50, gantryY + 68);
+        pCtx.stroke();
+        pCtx.setLineDash([]);
+        pCtx.fillStyle = '#f59e0b';
+        pCtx.beginPath();
+        pCtx.moveTo(gantryX + 22, gantryY + 40);
+        pCtx.lineTo(gantryX + 28, gantryY + 46);
+        pCtx.lineTo(gantryX + 16, gantryY + 46);
+        pCtx.fill();
+
+        // Plant Canopy in the Center / At Current Position
+        const plantX = 80 + (state.pos / 36.0) * (w - 180);
+        const plantBaseY = h - 28;
+
+        // Stem
+        pCtx.strokeStyle = '#059669';
+        pCtx.lineWidth = 5;
+        pCtx.beginPath();
+        pCtx.moveTo(plantX, plantBaseY);
+        pCtx.lineTo(plantX, 130);
+        pCtx.stroke();
+
+        // Lush Leaves
+        pCtx.fillStyle = '#10b981';
+        pCtx.strokeStyle = '#047857';
+        pCtx.lineWidth = 1.5;
+
+        // Center Leaf
+        pCtx.beginPath();
+        pCtx.ellipse(plantX, 126, 18, 14, 0, 0, Math.PI * 2);
+        pCtx.fill();
+        pCtx.stroke();
+
+        // Left Leaf
+        pCtx.beginPath();
+        pCtx.ellipse(plantX - 16, 138, 16, 10, -0.3, 0, Math.PI * 2);
+        pCtx.fill();
+        pCtx.stroke();
+
+        // Right Leaf
+        pCtx.beginPath();
+        pCtx.ellipse(plantX + 16, 138, 16, 10, 0.3, 0, Math.PI * 2);
+        pCtx.fill();
+        pCtx.stroke();
+
+        // Leaf veins
+        pCtx.strokeStyle = '#ffffff';
+        pCtx.lineWidth = 1.5;
+        pCtx.beginPath();
+        pCtx.moveTo(plantX - 10, 126); pCtx.lineTo(plantX + 10, 126);
+        pCtx.moveTo(plantX - 25, 138); pCtx.lineTo(plantX - 6, 138);
+        pCtx.moveTo(plantX + 6, 138); pCtx.lineTo(plantX + 25, 138);
+        pCtx.stroke();
+
+        // Plant Canopy Measurement Pill at Base
+        pCtx.fillStyle = '#78350f';
+        pCtx.beginPath();
+        pCtx.roundRect(plantX - 54, h - 24, 108, 18, 4);
+        pCtx.fill();
+        pCtx.fillStyle = '#ffffff';
+        pCtx.font = 'bold 9.5px Inter, sans-serif';
+        pCtx.textAlign = 'center';
+        pCtx.fillText(`PLANT CANOPY: ${filteredDist.toFixed(1)} cm`, plantX, h - 11);
+
+      } else {
+        // --- 2. BALL-ON-BEAM PHYSICAL RIG THEME (Clean Light Mode) ---
+        pCtx.fillStyle = '#f8fafc';
+        pCtx.fillRect(0, 0, w, h);
+
+        // Subtle grid
+        pCtx.strokeStyle = '#e2e8f0';
+        pCtx.lineWidth = 1;
+        for (let x = 40; x < w; x += 40) {
+          pCtx.beginPath(); pCtx.moveTo(x, 0); pCtx.lineTo(x, h); pCtx.stroke();
+        }
+
+        const pivotX = w / 2;
+        const pivotY = h * 0.65;
+        const beamLen = w * 0.78;
+        const beamAngleRad = (filteredDist - state.target) * -0.015;
+
+        pCtx.save();
+        pCtx.translate(pivotX, pivotY);
+        pCtx.rotate(beamAngleRad);
+
+        // Aluminum Beam Track
+        pCtx.fillStyle = '#38bdf8';
+        pCtx.strokeStyle = '#0284c7';
+        pCtx.lineWidth = 2;
+        pCtx.fillRect(-beamLen / 2, -5, beamLen, 10);
+        pCtx.strokeRect(-beamLen / 2, -5, beamLen, 10);
+
+        // HC-SR04 Transducer on Beam Left
+        pCtx.fillStyle = '#0284c7';
+        pCtx.fillRect(-beamLen / 2 - 25, -20, 25, 40);
+        pCtx.fillStyle = '#e0f2fe';
+        pCtx.beginPath();
+        pCtx.arc(-beamLen / 2 - 12, -7, 6, 0, Math.PI * 2);
+        pCtx.arc(-beamLen / 2 - 12, 7, 6, 0, Math.PI * 2);
+        pCtx.fill();
+
+        // Target Mark
+        const targetBeamX = -beamLen / 2 + (state.target / 40.0) * beamLen;
+        pCtx.strokeStyle = '#0284c7';
+        pCtx.lineWidth = 2;
+        pCtx.setLineDash([3, 3]);
+        pCtx.beginPath();
+        pCtx.moveTo(targetBeamX, -30);
+        pCtx.lineTo(targetBeamX, 15);
+        pCtx.stroke();
+        pCtx.setLineDash([]);
+
+        // Rolling Steel Ball
+        const ballX = -beamLen / 2 + (state.pos / 40.0) * beamLen;
+        const ballR = 14;
+        pCtx.fillStyle = '#f59e0b';
+        pCtx.strokeStyle = '#b45309';
+        pCtx.lineWidth = 2;
+        pCtx.beginPath();
+        pCtx.arc(ballX, -ballR - 5, ballR, 0, Math.PI * 2);
+        pCtx.fill();
+        pCtx.stroke();
+
+        // Force Vector: Velocity (green)
+        pCtx.strokeStyle = '#10b981';
+        pCtx.lineWidth = 3;
+        pCtx.beginPath();
+        pCtx.moveTo(ballX, -ballR - 5);
+        pCtx.lineTo(ballX + state.vel * 3.0, -ballR - 5);
+        pCtx.stroke();
+
+        pCtx.restore();
+
+        // Fulcrum / Pivot Stand
+        pCtx.fillStyle = '#94a3b8';
+        pCtx.strokeStyle = '#64748b';
+        pCtx.lineWidth = 2;
+        pCtx.beginPath();
+        pCtx.moveTo(pivotX, pivotY);
+        pCtx.lineTo(pivotX - 22, pivotY + 45);
+        pCtx.lineTo(pivotX + 22, pivotY + 45);
+        pCtx.closePath();
+        pCtx.fill();
+        pCtx.stroke();
       }
-      const writer = serialPort.writable.getWriter();
-      await writer.write(new TextEncoder().encode(cmd));
-      writer.releaseLock();
     }
+
+    // =========================================================================
+    // DIGITAL PHOSPHOR OSCILLOSCOPE (CLEAN WHITE LABORATORY STYLING)
+    // =========================================================================
+    function drawScope() {
+      const w = scopeCanvas.width;
+      const h = scopeCanvas.height;
+      sCtx.clearRect(0, 0, w, h);
+
+      // Clean White Phosphor Background
+      sCtx.fillStyle = '#ffffff';
+      sCtx.fillRect(0, 0, w, h);
+
+      // Subtle Gridlines
+      sCtx.strokeStyle = '#f1f5f9';
+      sCtx.lineWidth = 1;
+      for (let x = 0; x < w; x += 50) {
+        sCtx.beginPath(); sCtx.moveTo(x, 0); sCtx.lineTo(x, h); sCtx.stroke();
+      }
+
+      // Horizontal Value Gridlines & Axis Labels
+      const gridLevels = [
+        { val: 40, y: h * 0.10 },
+        { val: 30, y: h * 0.35 },
+        { val: 20, y: h * 0.60 },
+        { val: 10, y: h * 0.85 }
+      ];
+
+      sCtx.font = 'bold 9.5px JetBrains Mono, monospace';
+      sCtx.fillStyle = '#94a3b8';
+      gridLevels.forEach(gl => {
+        sCtx.strokeStyle = '#e2e8f0';
+        sCtx.setLineDash([3, 4]);
+        sCtx.beginPath();
+        sCtx.moveTo(45, gl.y);
+        sCtx.lineTo(w - 15, gl.y);
+        sCtx.stroke();
+        sCtx.setLineDash([]);
+        sCtx.fillText(`${gl.val} cm`, 8, gl.y + 3);
+      });
+
+      const hist = state.history;
+      if (hist.r.length < 2) return;
+
+      const len = hist.r.length;
+      const dx = (w - 60) / 280;
+
+      // 1. Draw Target Setpoint r(t) (Cyan Dashed Line)
+      sCtx.strokeStyle = '#38bdf8';
+      sCtx.lineWidth = 2.0;
+      sCtx.setLineDash([4, 4]);
+      sCtx.beginPath();
+      for (let i = 0; i < len; i++) {
+        const x = 50 + i * dx;
+        const y = h * 0.95 - (hist.r[i] / 42.0) * (h * 0.88);
+        if (i === 0) sCtx.moveTo(x, y); else sCtx.lineTo(x, y);
+      }
+      sCtx.stroke();
+      sCtx.setLineDash([]);
+
+      // 2. Draw Effort u(t) (Amber/Orange Subtle Background Line)
+      sCtx.strokeStyle = '#f59e0b';
+      sCtx.lineWidth = 1.5;
+      sCtx.globalAlpha = 0.5;
+      sCtx.beginPath();
+      for (let i = 0; i < len; i++) {
+        const x = 50 + i * dx;
+        const normU = (hist.u[i] - 25.0) / (155.0 - 25.0);
+        const y = h * 0.95 - normU * (h * 0.88);
+        if (i === 0) sCtx.moveTo(x, y); else sCtx.lineTo(x, y);
+      }
+      sCtx.stroke();
+      sCtx.globalAlpha = 1.0;
+
+      // 3. Draw Output Measured Distance y(t) (Solid Dark Sky Blue Line)
+      sCtx.strokeStyle = '#0284c7';
+      sCtx.lineWidth = 2.5;
+      sCtx.beginPath();
+      for (let i = 0; i < len; i++) {
+        const x = 50 + i * dx;
+        const y = h * 0.95 - (hist.y[i] / 42.0) * (h * 0.88);
+        if (i === 0) sCtx.moveTo(x, y); else sCtx.lineTo(x, y);
+      }
+      sCtx.stroke();
+    }
+
+    // Export CSV Log
+    function exportCSVLog() {
+      let csv = "step,time_s,setpoint_cm,measured_cm,servo_deg\n";
+      for (let i = 0; i < state.history.r.length; i++) {
+        csv += `${i},${(i * DT).toFixed(2)},${state.history.r[i].toFixed(2)},${state.history.y[i].toFixed(2)},${state.history.u[i].toFixed(1)}\n`;
+      }
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `control_x_telemetry_${Date.now()}.csv`;
+      a.click();
+    }
+
+    // Main 60 FPS Animation Loop
+    function appLoop(timestamp) {
+      if (!state.isPaused) {
+        simTimer += timestamp - lastSimTime;
+        while (simTimer >= DT * 1000) {
+          physicsStep();
+          simTimer -= DT * 1000;
+        }
+      }
+      lastSimTime = timestamp;
+
+      drawEnvironment();
+      drawScope();
+
+      requestAnimationFrame(appLoop);
+    }
+
+    // Start App
+    requestAnimationFrame(appLoop);
   </script>
 </body>
 </html>

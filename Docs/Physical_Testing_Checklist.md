@@ -88,3 +88,4 @@ $$\text{Columns: } \texttt{timestamp,setpoint,distance,error,servo\_angle,Kp,Ki,
 In accordance with academic evaluation standards:
 * Never present simulated plots as hardware data.
 * Always overlay physical CSV records using the simulator's **Replay Mode** (`python simulator.py --replay`) to showcase the quantitative Root-Mean-Square Error ($\text{RMSE}$) between physical hardware and numerical simulation.
+

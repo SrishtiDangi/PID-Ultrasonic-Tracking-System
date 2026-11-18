@@ -329,3 +329,4 @@ if __name__ == "__main__":
 
     print("\n[*] Running Stability and Frequency Domain Analysis (B3)...")
     analyze_stability()
+

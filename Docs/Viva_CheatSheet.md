@@ -181,3 +181,4 @@ This document contains high-rigor theoretical and practical engineering justific
 | Proportional Gain | $K_p$ | $2.40$ | $\text{deg/cm}$ |
 | Integral Gain | $K_i$ | $0.04$ | $\text{deg}/(\text{cm}\cdot\text{s})$ |
 | Derivative Gain | $K_d$ | $0.90$ | $\text{deg}\cdot\text{s}/\text{cm}$ |
+
