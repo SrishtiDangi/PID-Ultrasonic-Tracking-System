@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "author": "Srishti Dangi",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 120, "left": 180, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic", "top": -40, "left": 60, "attrs": { "distance": "20" } },
+    { "type": "wokwi-servo", "id": "servo", "top": -40, "left": 360, "attrs": {} },
+    { "type": "wokwi-lcd1602", "id": "lcd", "top": 360, "left": 160, "attrs": { "pins": "full" } }
+  ],
+  "connections": [
+    [ "uno:5V", "ultrasonic:VCC", "red", [ "v-20", "h-120" ] ],
+    [ "uno:GND.1", "ultrasonic:GND", "black", [ "v-30", "h-140" ] ],
+    [ "uno:9", "ultrasonic:TRIG", "blue", [ "v-40", "h-80" ] ],
+    [ "uno:10", "ultrasonic:ECHO", "green", [ "v-45", "h-70" ] ],
+
+    [ "uno:5V", "servo:V+", "red", [ "v-20", "h120" ] ],
+    [ "uno:GND.1", "servo:GND", "black", [ "v-30", "h100" ] ],
+    [ "uno:6", "servo:PWM", "orange", [ "v-50", "h140" ] ],
+
+    [ "uno:GND.2", "lcd:VSS", "black", [ "v50", "h-60" ] ],
+    [ "uno:5V", "lcd:VDD", "red", [ "v40", "h-50" ] ],
+    [ "uno:GND.2", "lcd:V0", "black", [ "v50", "h-40" ] ],
+    [ "uno:2", "lcd:RS", "purple", [ "v60", "h-30" ] ],
+    [ "uno:GND.2", "lcd:RW", "black", [ "v50", "h-20" ] ],
+    [ "uno:3", "lcd:E", "white", [ "v65", "h-10" ] ],
+    [ "uno:4", "lcd:D4", "cyan", [ "v70", "h0" ] ],
+    [ "uno:5", "lcd:D5", "magenta", [ "v75", "h10" ] ],
+    [ "uno:7", "lcd:D6", "yellow", [ "v80", "h20" ] ],
+    [ "uno:8", "lcd:D7", "gray", [ "v85", "h30" ] ],
+    [ "uno:5V", "lcd:A", "red", [ "v40", "h50" ] ],
+    [ "uno:GND.2", "lcd:K", "black", [ "v50", "h60" ] ]
+  ],
+  "dependencies": {}
+}
+

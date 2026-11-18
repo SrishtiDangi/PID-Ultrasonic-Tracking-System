@@ -1,0 +1,8 @@
+{
+  "plant_damping": 1.7933,
+  "servo_alpha": 0.3572,
+  "linkage_ratio": 0.141,
+  "coulomb_friction": 0.0,
+  "fit_rmse_cm": 0.1773,
+  "source_log": "logs/sample_hardware_step_test.csv"
+}

@@ -1,0 +1,5 @@
+[wokwi]
+version = 1
+firmware = "pid_control_main/build/pid_control_main.ino.hex"
+elf = "pid_control_main/build/pid_control_main.ino.elf"
+

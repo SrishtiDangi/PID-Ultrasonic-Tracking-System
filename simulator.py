@@ -1,20 +1,8 @@
 """
-PID Closed-Loop Ultrasonic Tracking & Balancing System
-Ultra-Interactive Multi-Environment Physics Simulator & Control Bench
-Evaluation: Control Systems / Embedded Systems Laboratory (100 Marks)
-
-Core Innovations:
-1. Multi-Environment Visualizer:
-   - 🌿 Greenhouse / Plant Canopy Height & Irrigation Tracker (Actual Botanical Plants!)
-   - 🚗 Autonomous Vehicle / Adaptive Cruise Control (ACC)
-   - 🔬 Laboratory Hardware Bench Apparatus (HC-SR04 & Micro Servo)
-2. Live Parameter Impact Engine:
-   - Instant visual feedback when moving Kp, Ki, Kd, Target, or Noise
-   - Live P, I, D Action Breakdown Bars (shows exact contribution of each term)
-   - Real-time Physics Force Vectors (PID Drive Force vs Damping Drag)
-   - Automatic micro-settling response so sliders visibly change plant behavior immediately
-   - Educational insight ticker explaining the control theory of what just changed
-3. Bang-Bang vs PID Comparative Analysis & System Power Toggle
+================================================================================
+PID ULTRASONIC DYNAMIC TRACKING BENCH // COMPACT & RESPONSIVE SUITE
+Fits all laptop screens (zero taskbar cut-off) • Live on startup • No text overlap
+================================================================================
 """
 
 import sys
@@ -33,392 +21,512 @@ except ImportError:
     SERIAL_AVAILABLE = False
 
 
-class PIDPhysicsSimulator(tk.Tk):
+class VisualPIDSimulatorApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("AERO-PID // Advanced Closed-Loop Autonomous Control Bench (100 Marks)")
-        self.geometry("1140x860")
-        self.configure(bg="#080a0f")
-        self.minsize(1000, 760)
+        self.title("PID ULTRASONIC DYNAMIC TRACKING BENCH")
+        # Compact height to fit all laptop screens comfortably
+        self.geometry("980x640")
+        self.configure(bg="#090d16")
+        self.minsize(920, 600)
 
         # Operational States
         self.mode = "sim"
-        self.system_enabled = True
+        self.rig_type = "beam"                # "beam" (Ball & Beam) or "tracker" (1-DOF)
+        self.trajectory_mode = "sine"         # Start with active sine trajectory so it's ALIVE on launch!
         self.controller_type = "PID"
-        self.env_view = "plant"               # "plant" (Botanical), "vehicle" (Car ACC), "bench" (Lab Track)
-        self.ser = None
+        self.show_vectors = True
         self.is_hw_connected = False
+        self.ser = None
 
-        # Physical Plant Dynamics (2nd-order system: mass, damper, spring)
-        self.position = 20.0                  # cm (or meters in vehicle mode)
+        # Playback & Timing Controls (A3)
+        self.is_paused = False
+        self.speed_multiplier = 1.0           # 0.1x to 2.0x
+        self.hover_x = None
+        self.hover_y = None
+
+        # Plant / Physical State
+        self.position = 12.0                  # cm
         self.velocity = 0.0                  # cm/s
-        self.target = 20.0                    # cm
+        self.acceleration = 0.0              # cm/s^2
+        self.target = 22.0                    # cm
+        self.prev_step_target = 22.0
+        self.beam_angle = 0.0                # degrees (-22° to +22°)
+        self.ball_rotation = 0.0             # degrees
         self.plant_mass = 1.0                # kg
-        self.plant_damping = 1.8             # N*s/cm
-        self.noise_amplitude = 0.35           # cm
+        self.plant_damping = 2.0             # N*s/cm
+        self.noise_amp = 0.20                # cm
 
-        # PID Controller Parameters & Decomposition
-        self.kp = 2.4
-        self.ki = 0.05
-        self.kd = 0.85
+        # Mouse Dragging State (A1)
+        self.is_dragging_ball = False
+        self.is_dragging_servo = False
+        self.last_ball_pixel_pos = (200, 75)
+        self.last_servo_pixel_pos = (850, 100)
+
+        # Disturbance & Recovery State (A4)
+        self.recovery_start_time = None
+        self.recovery_in_progress = False
+        self.constant_wind = 0.0              # cm/s^2
+        self.sensor_dropout_until = 0.0       # timestamp
+        self.noise_burst_until = 0.0
+
+        # Physical Toggles (A5)
+        self.use_ema_filter = True
+        self.use_friction = True
+        self.use_deadband = False
+
+        # Trajectory Generator & Metrics State (A8)
+        self.traj_time = 0.0
+        self.sine_freq = 0.20                 # Hz
+        self.sine_amp = 8.0                   # cm
+        self.step_start_time = time.time()
+        self.step_iae = 0.0                   # Integral of Absolute Error (cm*s)
+        self.step_itae = 0.0                  # Integral of Time-weighted Absolute Error (cm*s^2)
+
+        # PID Controller Parameters
+        self.kp = 2.40
+        self.ki = 0.04
+        self.kd = 0.90
         self.integral = 0.0
         self.prev_error = 0.0
-        self.filtered_derivative = 0.0
-        self.alpha_deriv = 0.22
-        self.alpha_ema = 0.30
-        self.smoothed_dist = 20.0
-        self.raw_dist = 20.0
-        self.p_term = 0.0
-        self.i_term = 0.0
-        self.d_term = 0.0
+        self.filtered_deriv = 0.0
+        self.alpha_d = 0.20
+        self.alpha_dist = 0.30
+        self.smoothed_dist = 12.0
         self.control_output = 0.0
         self.servo_angle = 90.0
 
-        # Explanation Ticker
-        self.insight_text = "System Ready. Adjust sliders or click step buttons to observe dynamic PID compensation."
-        self.insight_color = "#38bdf8"
+        # Oscilloscope Buffers (A3: Stacked r, y, error, servo, time)
+        self.buf_len = 140
+        self.target_buf = [22.0] * self.buf_len
+        self.pos_buf = [12.0] * self.buf_len
+        self.err_buf = [10.0] * self.buf_len
+        self.servo_buf = [90.0] * self.buf_len
+        self.hw_buf = [None] * self.buf_len
 
-        # Transient Response Analytics
-        self.step_start_time = time.time()
-        self.step_initial_pos = 20.0
-        self.rise_time = 0.0
-        self.settling_time = 0.0
-        self.peak_overshoot = 0.0
-        self.steady_state_error = 0.0
-        self.step_monitoring = True
-
-        # Oscilloscope Buffers (140 points)
-        self.buffer_len = 140
-        self.target_buffer = [20.0] * self.buffer_len
-        self.pos_buffer = [20.0] * self.buffer_len
-        self.ctrl_buffer = [0.0] * self.buffer_len
+        # Hardware CSV Replay State (C2)
+        self.replay_data = None
+        self.replay_idx = 0
+        self.hw_replay_pos = None
+        self.replay_rmse = 0.0
+        self.replay_sq_errs = []
 
         # Visual Loop Variables
-        self.last_sim_time = time.time()
+        self.last_time = time.time()
         self.wave_phase = 0.0
-        self.road_scroll = 0.0
-        self.plant_sway = 0.0
-        self.spray_phase = 0.0
 
         self.build_ui()
-        self.animate_loop()
+        self.bind_shortcuts()
+        self.run_loop()
 
     def build_ui(self):
-        # 1. TOP HEADER / COCKPIT STATUS BAR
-        header = tk.Frame(self, bg="#0d111a", padx=14, pady=8, highlightthickness=1, highlightbackground="#1e293b")
-        header.pack(fill=tk.X, side=tk.TOP)
+        # 1. HEADER (Compact & Clean)
+        header = tk.Frame(self, bg="#131c2e", padx=12, pady=6, highlightthickness=1, highlightbackground="#1e293b")
+        header.pack(fill=tk.X, side=tk.TOP, padx=10, pady=(6, 4))
 
-        title_frame = tk.Frame(header, bg="#0d111a")
-        title_frame.pack(side=tk.LEFT)
+        title_box = tk.Frame(header, bg="#131c2e")
+        title_box.pack(side=tk.LEFT)
 
-        h_title = tk.Frame(title_frame, bg="#0d111a")
+        h_title = tk.Frame(title_box, bg="#131c2e")
         h_title.pack(anchor="w")
-        tk.Label(h_title, text="CONTROL-X", fg="#00f2fe", bg="#0d111a", font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
-        tk.Label(h_title, text=" // DUAL DOMAIN PID & PHYSICAL PLANT BENCH", fg="#ffffff", bg="#0d111a", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(h_title, text="●", fg="#38bdf8", bg="#131c2e", font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=(0, 4))
+        tk.Label(h_title, text="PID ULTRASONIC DYNAMIC TRACKING BENCH", fg="#38bdf8", bg="#131c2e", font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
 
-        self.sub_header_lbl = tk.Label(title_frame, text="Active Context: 🌿 Smart Agriculture / Botanical Canopy Distance Keeping", fg="#10b981", bg="#0d111a", font=("Segoe UI", 8))
-        self.sub_header_lbl.pack(anchor="w", pady=1)
+        tk.Label(title_box, text="HC-SR04 Transducer • SG90 Servo • Live Physics Vectors & Oscilloscope", fg="#94a3b8", bg="#131c2e", font=("Segoe UI", 8)).pack(anchor="w")
 
-        # Switchboard (Top Right)
-        switchboard = tk.Frame(header, bg="#0d111a")
-        switchboard.pack(side=tk.RIGHT)
+        controls_box = tk.Frame(header, bg="#131c2e")
+        controls_box.pack(side=tk.RIGHT)
 
-        # Power Toggle
-        self.btn_power = tk.Button(switchboard, text="● SYSTEM ACTIVE", command=self.toggle_system_power, bg="#059669", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=3, activebackground="#10b981", cursor="hand2")
-        self.btn_power.pack(side=tk.LEFT, padx=4)
+        self.btn_rig = tk.Button(controls_box, text="Rig: ⚖️ Ball-on-Beam", command=self.toggle_rig, bg="#4f46e5", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=2, cursor="hand2")
+        self.btn_rig.pack(side=tk.LEFT, padx=3)
 
-        # Algorithm Selector
-        self.btn_algo = tk.Button(switchboard, text="MODE: PID CONTROLLER", command=self.toggle_controller_algo, bg="#1e293b", fg="#38bdf8", font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=3, activebackground="#334155", cursor="hand2")
-        self.btn_algo.pack(side=tk.LEFT, padx=4)
+        self.btn_mode = tk.Button(controls_box, text="Mode: PID", command=self.toggle_controller_mode, bg="#0284c7", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=2, cursor="hand2")
+        self.btn_mode.pack(side=tk.LEFT, padx=3)
 
-        # 3-Way Environment Switcher
-        self.btn_env = tk.Button(switchboard, text="ENV: 🌿 GREENHOUSE PLANTS", command=self.cycle_env_view, bg="#047857", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=3, activebackground="#059669", cursor="hand2")
-        self.btn_env.pack(side=tk.LEFT, padx=4)
+        self.btn_traj = tk.Button(controls_box, text="Trajectory: 🌊 Sine", command=self.toggle_trajectory, bg="#059669", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=2, cursor="hand2")
+        self.btn_traj.pack(side=tk.LEFT, padx=3)
 
-        # USB Connection
-        self.port_combo = ttk.Combobox(switchboard, width=7, state="readonly", font=("Segoe UI", 8))
-        self.port_combo.pack(side=tk.LEFT, padx=3)
+        self.btn_replay = tk.Button(controls_box, text="📼 Replay CSV", command=self.load_replay_csv, bg="#6366f1", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=2, cursor="hand2")
+        self.btn_replay.pack(side=tk.LEFT, padx=3)
+
+        self.port_combo = ttk.Combobox(controls_box, width=6, state="readonly")
+        self.port_combo.pack(side=tk.LEFT, padx=2)
         self.refresh_ports()
-        self.btn_hw_connect = tk.Button(switchboard, text="USB", command=self.toggle_hw_connection, bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 8, "bold"), relief="flat", padx=6, pady=3, cursor="hand2")
-        self.btn_hw_connect.pack(side=tk.LEFT, padx=2)
+        self.btn_hw = tk.Button(controls_box, text="USB", command=self.toggle_serial, bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 8, "bold"), relief="flat", padx=6, pady=2, cursor="hand2")
+        self.btn_hw.pack(side=tk.LEFT, padx=2)
 
-        # 2. TELEMETRY BADGES ROW
-        cards_bar = tk.Frame(self, bg="#080a0f", padx=10, pady=5)
-        cards_bar.pack(fill=tk.X)
+        # 2. STATUS TILES ROW (Compact - A8: with Units & Step ITAE)
+        tiles_frame = tk.Frame(self, bg="#090d16", padx=10, pady=2)
+        tiles_frame.pack(fill=tk.X)
 
-        self.card_target = self.create_badge(cards_bar, "TARGET SETPOINT (r)", "20.0 cm", "#00f2fe", 0)
-        self.card_pos = self.create_badge(cards_bar, "PLANT DISTANCE (y)", "20.0 cm", "#38bdf8", 1)
-        self.card_error = self.create_badge(cards_bar, "TRACKING ERROR (e)", "0.0 cm", "#f43f5e", 2)
-        self.card_mode = self.create_badge(cards_bar, "ALGORITHM STATE", "PID CONVERGED", "#10b981", 3)
-        self.card_settling = self.create_badge(cards_bar, "SETTLING TIME (ts)", "1.75 s", "#fbbf24", 4)
-        self.card_overshoot = self.create_badge(cards_bar, "PEAK OVERSHOOT (Mp)", "7.8 %", "#a78bfa", 5)
+        self.lbl_target = self.make_badge(tiles_frame, "TARGET (r)", "22.0 cm", "#38bdf8", 0)
+        self.lbl_measured = self.make_badge(tiles_frame, "MEASURED (y)", "12.0 cm", "#10b981", 1)
+        self.lbl_error = self.make_badge(tiles_frame, "ERROR (e)", "+10.0 cm", "#f43f5e", 2)
+        self.lbl_servo = self.make_badge(tiles_frame, "SERVO (θ)", "90°", "#fbbf24", 3)
+        self.lbl_vel = self.make_badge(tiles_frame, "VELOCITY (v)", "0.0 cm/s", "#2dd4bf", 4)
+        self.lbl_iae = self.make_badge(tiles_frame, "IAE (cm·s)", "0.0 cm·s", "#c084fc", 5)
+        self.lbl_itae = self.make_badge(tiles_frame, "ITAE (cm·s²)", "0.0 cm·s²", "#a78bfa", 6)
 
-        # 3. LIVE "WHAT'S ACTUALLY HAPPENING" PID DECOMPOSITION HUD
-        decomp_frame = tk.Frame(self, bg="#0d111a", padx=12, pady=5, highlightthickness=1, highlightbackground="#1e293b")
-        decomp_frame.pack(fill=tk.X, padx=10, pady=2)
+        # 3. CENTER DISPLAY: HARDWARE RIG (TOP) + OSCILLOSCOPE (BOTTOM)
+        center_frame = tk.Frame(self, bg="#090d16", padx=10)
+        center_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Left: Live P, I, D Action Bars
-        bars_box = tk.Frame(decomp_frame, bg="#0d111a")
-        bars_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # 3A. Physical Viewport (Compact: 150px height)
+        anim_box = tk.Frame(center_frame, bg="#131c2e", highlightthickness=1, highlightbackground="#1e293b")
+        anim_box.pack(fill=tk.X, pady=2)
 
-        self.bar_p_canvas = self.make_action_meter(bars_box, "P-Action (Spring Restoring Force):", "#00f2fe", 0)
-        self.bar_i_canvas = self.make_action_meter(bars_box, "I-Action (Steady-State Integrator):", "#38bdf8", 1)
-        self.bar_d_canvas = self.make_action_meter(bars_box, "D-Action (Velocity Damper/Braking):", "#fbbf24", 2)
-
-        # Right: Real-time Theory Insight Ticker
-        insight_box = tk.Frame(decomp_frame, bg="#131926", padx=10, pady=4, highlightthickness=1, highlightbackground="#1f293d")
-        insight_box.pack(side=tk.RIGHT, padx=5)
-
-        tk.Label(insight_box, text="REAL-TIME CONTROL INSIGHT:", fg="#64748b", bg="#131926", font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        self.insight_lbl = tk.Label(insight_box, text=self.insight_text, fg="#38bdf8", bg="#131926", font=("Segoe UI", 8, "bold"), wraplength=380, justify="left")
-        self.insight_lbl.pack(anchor="w")
-
-        # 4. CENTER DISPLAY: ANIMATION CANVAS + OSCILLOSCOPE
-        display_frame = tk.Frame(self, bg="#080a0f", padx=10, pady=2)
-        display_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Animation Viewport
-        self.anim_frame = tk.Frame(display_frame, bg="#0d111a", highlightthickness=1, highlightbackground="#1e293b")
-        self.anim_frame.pack(fill=tk.X, pady=3)
-
-        anim_hud = tk.Frame(self.anim_frame, bg="#0d111a", padx=8, pady=2)
-        anim_hud.pack(fill=tk.X)
-        self.anim_title_lbl = tk.Label(anim_hud, text="ENVIRONMENT: 🌿 AUTOMATED GREENHOUSE - ULTRASONIC PLANT CANOPY DISTANCE CONTROL", fg="#10b981", bg="#0d111a", font=("Segoe UI", 8, "bold"))
+        anim_hdr = tk.Frame(anim_box, bg="#131c2e", padx=8, pady=2)
+        anim_hdr.pack(fill=tk.X)
+        self.anim_title_lbl = tk.Label(anim_hdr, text="PHYSICAL MECHANICAL RIG & REAL-TIME FORCE VECTORS", fg="#38bdf8", bg="#131c2e", font=("Segoe UI", 8, "bold"))
         self.anim_title_lbl.pack(side=tk.LEFT)
-        self.anim_status_lbl = tk.Label(anim_hud, text="APPLICATION: AUTOMATED SPRAY NOZZLE / LIGHTING BOOM HEIGHT REGULATION", fg="#64748b", bg="#0d111a", font=("Segoe UI", 7, "bold"))
-        self.anim_status_lbl.pack(side=tk.RIGHT)
 
-        self.anim_canvas = tk.Canvas(self.anim_frame, height=175, bg="#05070c", highlightthickness=0)
+        v_leg = tk.Frame(anim_hdr, bg="#131c2e")
+        v_leg.pack(side=tk.RIGHT)
+        tk.Label(v_leg, text="→ Velocity (v)", fg="#34d399", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=5)
+        tk.Label(v_leg, text="→ Gravity (a)", fg="#fbbf24", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=5)
+        tk.Label(v_leg, text="→ PID Thrust (F)", fg="#00f2fe", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=5)
+
+        self.anim_canvas = tk.Canvas(anim_box, height=150, bg="#060911", highlightthickness=0)
         self.anim_canvas.pack(fill=tk.X, expand=True)
+        # Mouse Drag & Click Bindings (A1)
+        self.anim_canvas.bind("<Button-1>", self.on_rig_click)
+        self.anim_canvas.bind("<B1-Motion>", self.on_rig_drag)
+        self.anim_canvas.bind("<ButtonRelease-1>", self.on_rig_release)
 
-        # Oscilloscope Viewport
-        scope_frame = tk.Frame(display_frame, bg="#0d111a", highlightthickness=1, highlightbackground="#1e293b")
-        scope_frame.pack(fill=tk.BOTH, expand=True, pady=3)
+        # 3B. Stacked Oscilloscope (A3: r/y, error, servo saturation, pause/step, hover)
+        graph_box = tk.Frame(center_frame, bg="#131c2e", highlightthickness=1, highlightbackground="#1e293b")
+        graph_box.pack(fill=tk.BOTH, expand=True, pady=2)
 
-        scope_hud = tk.Frame(scope_frame, bg="#0d111a", padx=8, pady=3)
-        scope_hud.pack(fill=tk.X)
+        graph_hdr = tk.Frame(graph_box, bg="#131c2e", padx=6, pady=2)
+        graph_hdr.pack(fill=tk.X)
+        tk.Label(graph_hdr, text="STACKED OSCILLOSCOPE", fg="#10b981", bg="#131c2e", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        tk.Label(graph_hdr, text="■ r", fg="#38bdf8", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(graph_hdr, text="■ y", fg="#10b981", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(graph_hdr, text="■ e", fg="#f43f5e", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(graph_hdr, text="■ u (θ)", fg="#fbbf24", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
 
-        tk.Label(scope_hud, text="DYNAMIC STEP RESPONSE (DIGITAL PHOSPHOR OSCILLOSCOPE)", fg="#e2e8f0", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
-        tk.Label(scope_hud, text="■ Setpoint r(t)", fg="#00f2fe", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=10)
-        tk.Label(scope_hud, text="■ Output y(t)", fg="#38bdf8", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
-        tk.Label(scope_hud, text="■ Effort u(t)", fg="#fbbf24", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
+        # Interactive Scope Toolbar (A3)
+        scope_tools = tk.Frame(graph_hdr, bg="#131c2e")
+        scope_tools.pack(side=tk.RIGHT)
 
-        self.scope_metrics_lbl = tk.Label(scope_hud, text="tr: 0.85s | ts: 1.82s | Mp: 7.8% | ess: 0.00cm", fg="#10b981", bg="#0d111a", font=("Segoe UI", 8, "bold"))
-        self.scope_metrics_lbl.pack(side=tk.RIGHT, padx=6)
+        self.btn_pause = tk.Button(scope_tools, text="⏸ Pause", command=self.toggle_pause, bg="#1e293b", fg="white", font=("Segoe UI", 7, "bold"), relief="flat", padx=6, pady=1, cursor="hand2")
+        self.btn_pause.pack(side=tk.LEFT, padx=2)
 
-        self.scope_canvas = tk.Canvas(scope_frame, bg="#040609", highlightthickness=0)
-        self.scope_canvas.pack(fill=tk.BOTH, expand=True)
+        self.btn_step = tk.Button(scope_tools, text="⏭ Step", command=self.step_once, bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 7), relief="flat", padx=5, pady=1, cursor="hand2")
+        self.btn_step.pack(side=tk.LEFT, padx=2)
 
-        # 5. BOTTOM COCKPIT BENCH CONTROLS
-        ctrl_frame = tk.Frame(self, bg="#0d111a", padx=12, pady=6, highlightthickness=1, highlightbackground="#1e293b")
-        ctrl_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=10, pady=6)
+        tk.Label(scope_tools, text="Speed:", fg="#64748b", bg="#131c2e", font=("Segoe UI", 7)).pack(side=tk.LEFT, padx=(3, 1))
+        for spd in [0.2, 0.5, 1.0, 2.0]:
+            tk.Button(scope_tools, text=f"{spd}x", command=lambda s=spd: self.set_speed(s), bg="#1e293b", fg="#38bdf8", font=("Segoe UI", 7), relief="flat", padx=3, pady=1, cursor="hand2").pack(side=tk.LEFT, padx=1)
 
-        # Tuning Sliders Row
-        sliders_box = tk.Frame(ctrl_frame, bg="#0d111a")
+        self.lbl_zoom = tk.Label(scope_tools, text="1.0x Zoom", fg="#a78bfa", bg="#131c2e", font=("Segoe UI", 7))
+        self.lbl_zoom.pack(side=tk.LEFT, padx=3)
+
+        self.graph_canvas = tk.Canvas(graph_box, height=130, bg="#04060c", highlightthickness=0)
+        self.graph_canvas.pack(fill=tk.BOTH, expand=True)
+        self.graph_canvas.bind("<Motion>", self.on_scope_hover)
+        self.graph_canvas.bind("<Leave>", self.on_scope_leave)
+        self.graph_canvas.bind("<MouseWheel>", self.on_scope_scroll)
+        self.graph_canvas.bind("<Button-4>", lambda e: self.zoom_scope(-10))
+        self.graph_canvas.bind("<Button-5>", lambda e: self.zoom_scope(10))
+
+        # 4. BOTTOM CONTROLS (Compact & Fully Visible on all screens!)
+        ctrl_frame = tk.Frame(self, bg="#131c2e", padx=10, pady=6, highlightthickness=1, highlightbackground="#1e293b")
+        ctrl_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=10, pady=(2, 6))
+
+        sliders_box = tk.Frame(ctrl_frame, bg="#131c2e")
         sliders_box.pack(fill=tk.X)
 
-        self.slider_kp = self.add_styled_slider(sliders_box, "PROPORTIONAL (Kp):", 0.0, 10.0, self.kp, 0.1, "#00f2fe", "P", 0)
-        self.slider_ki = self.add_styled_slider(sliders_box, "INTEGRAL (Ki):", 0.0, 0.5, self.ki, 0.01, "#38bdf8", "I", 1)
-        self.slider_kd = self.add_styled_slider(sliders_box, "DERIVATIVE (Kd):", 0.0, 3.0, self.kd, 0.05, "#fbbf24", "D", 2)
-        self.slider_target = self.add_styled_slider(sliders_box, "TARGET SETPOINT (cm):", 5.0, 45.0, self.target, 1.0, "#a78bfa", "T", 3)
-        self.slider_noise = self.add_styled_slider(sliders_box, "SENSOR NOISE JITTER:", 0.0, 2.0, self.noise_amplitude, 0.1, "#f43f5e", "N", 4)
+        self.s_kp = self.add_slider(sliders_box, "Proportional (Kp):", 0.0, 8.0, self.kp, 0.1, "#38bdf8", 0)
+        self.s_ki = self.add_slider(sliders_box, "Integral (Ki):", 0.0, 0.2, self.ki, 0.01, "#10b981", 1)
+        self.s_kd = self.add_slider(sliders_box, "Derivative (Kd):", 0.0, 2.5, self.kd, 0.05, "#fbbf24", 2)
+        self.s_target = self.add_slider(sliders_box, "Target Distance (cm):", 5.0, 45.0, self.target, 1.0, "#c084fc", 3)
 
-        # Step Buttons & Disturbance Impulse Row
-        actions_row = tk.Frame(ctrl_frame, bg="#0d111a", pady=3)
-        actions_row.pack(fill=tk.X)
+        btn_row = tk.Frame(ctrl_frame, bg="#131c2e", pady=3)
+        btn_row.pack(fill=tk.X)
 
-        tk.Label(actions_row, text="DYNAMIC TEST PROBES:", fg="#64748b", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
-        for target_val in [15.0, 25.0, 35.0]:
-            btn = tk.Button(actions_row, text=f"Step {int(target_val)} cm", command=lambda v=target_val: self.trigger_step(v), bg="#1e293b", fg="#00f2fe", relief="flat", padx=8, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2", activebackground="#334155")
-            btn.pack(side=tk.LEFT, padx=2)
+        tk.Label(btn_row, text="Disturbances (A4):", fg="#f59e0b", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="⚡ Push (+10cm)", command=self.apply_nudge, bg="#e11d48", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="💨 Wind", command=lambda: self.apply_disturbance("wind"), bg="#b45309", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="📴 Dropout", command=lambda: self.apply_disturbance("dropout"), bg="#475569", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="💥 Noise", command=lambda: self.apply_disturbance("burst"), bg="#9333ea", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
 
-        tk.Label(actions_row, text="|", fg="#334155", bg="#0d111a").pack(side=tk.LEFT, padx=6)
+        tk.Label(btn_row, text="|", fg="#334155", bg="#131c2e").pack(side=tk.LEFT, padx=4)
 
-        # Disturbance Button
-        btn_nudge = tk.Button(actions_row, text="⚡ INJECT PHYSICAL DISTURBANCE (+8 cm NUDGE)", command=self.inject_nudge, bg="#be123c", fg="#ffffff", relief="flat", padx=10, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2", activebackground="#e11d48")
-        btn_nudge.pack(side=tk.LEFT, padx=3)
+        self.btn_ema = tk.Button(btn_row, text="EMA Filter: ON", command=self.toggle_ema, bg="#10b981", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2")
+        self.btn_ema.pack(side=tk.LEFT, padx=2)
 
-        btn_rst_int = tk.Button(actions_row, text="Reset Integrator", command=self.reset_integrator, bg="#334155", fg="#cbd5e1", relief="flat", padx=7, pady=2, font=("Segoe UI", 7), cursor="hand2")
-        btn_rst_int.pack(side=tk.LEFT, padx=3)
+        tk.Label(btn_row, text="| Quick Set:", fg="#94a3b8", bg="#131c2e", font=("Segoe UI", 7)).pack(side=tk.LEFT, padx=2)
+        for t_val in [15, 25, 35]:
+            tk.Button(btn_row, text=f"{t_val}cm", command=lambda v=t_val: self.set_target(v), bg="#1e293b", fg="#38bdf8", relief="flat", padx=5, pady=1, font=("Segoe UI", 7), cursor="hand2").pack(side=tk.LEFT, padx=1)
 
-    def create_badge(self, parent, title, val, color, col):
-        card = tk.Frame(parent, bg="#0d111a", padx=8, pady=5, highlightthickness=1, highlightbackground="#1e293b")
-        card.grid(row=0, column=col, padx=3, sticky="nsew")
+    def make_badge(self, parent, title, val, color, col):
+        card = tk.Frame(parent, bg="#131c2e", padx=8, pady=4, highlightthickness=1, highlightbackground="#1e293b")
+        card.grid(row=0, column=col, padx=2, sticky="nsew")
         parent.grid_columnconfigure(col, weight=1)
 
-        accent = tk.Frame(card, bg=color, height=2)
-        accent.pack(fill=tk.X, side=tk.TOP, pady=(0, 3))
-
-        tk.Label(card, text=title, fg="#64748b", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        lbl = tk.Label(card, text=val, fg=color, bg="#0d111a", font=("Segoe UI", 11, "bold"))
+        tk.Label(card, text=title, fg="#64748b", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(anchor="w")
+        lbl = tk.Label(card, text=val, fg=color, bg="#131c2e", font=("Consolas", 10, "bold"))
         lbl.pack(anchor="w", pady=1)
         return lbl
 
-    def make_action_meter(self, parent, label_text, color, col):
-        frame = tk.Frame(parent, bg="#0d111a", padx=4)
-        frame.grid(row=0, column=col, sticky="ew")
+    def add_slider(self, parent, label, from_val, to_val, default_val, res, color, col):
+        box = tk.Frame(parent, bg="#131c2e", padx=5)
+        box.grid(row=0, column=col, sticky="ew")
         parent.grid_columnconfigure(col, weight=1)
 
-        hdr = tk.Frame(frame, bg="#0d111a")
-        hdr.pack(fill=tk.X)
-        tk.Label(hdr, text=label_text, fg="#94a3b8", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
-        val_lbl = tk.Label(hdr, text="0.0 N", fg=color, bg="#0d111a", font=("Segoe UI", 7, "bold"))
+        var = tk.DoubleVar(value=default_val)
+        top = tk.Frame(box, bg="#131c2e")
+        top.pack(fill=tk.X)
+        tk.Label(top, text=label, fg="#cbd5e1", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
+        val_lbl = tk.Label(top, text=f"{default_val:.2f}", fg=color, bg="#131c2e", font=("Consolas", 8, "bold"))
         val_lbl.pack(side=tk.RIGHT)
 
-        canvas = tk.Canvas(frame, height=10, bg="#05070c", highlightthickness=1, highlightbackground="#1e293b")
-        canvas.pack(fill=tk.X, pady=2)
-        canvas.val_lbl = val_lbl
-        canvas.color = color
-        return canvas
+        def on_change(v):
+            val_lbl.config(text=f"{float(v):.2f}")
+            self.on_param_update()
 
-    def add_styled_slider(self, parent, label_text, from_val, to_val, default_val, res, color, param_tag, col):
-        frame = tk.Frame(parent, bg="#0d111a", padx=3)
-        frame.grid(row=0, column=col, padx=3, sticky="ew")
-        parent.grid_columnconfigure(col, weight=1)
-
-        val_var = tk.DoubleVar(value=default_val)
-        hdr = tk.Frame(frame, bg="#0d111a")
-        hdr.pack(fill=tk.X)
-        tk.Label(hdr, text=label_text, fg="#94a3b8", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
-        val_lbl = tk.Label(hdr, text=f"{default_val:.2f}", fg=color, bg="#0d111a", font=("Segoe UI", 8, "bold"))
-        val_lbl.pack(side=tk.RIGHT)
-
-        def on_slide(val):
-            v = float(val)
-            val_lbl.config(text=f"{v:.2f}")
-            self.on_slider_change(param_tag, v)
-
-        scale = tk.Scale(frame, from_=from_val, to=to_val, resolution=res, variable=val_var, orient=tk.HORIZONTAL, showvalue=False, command=on_slide, bg="#1e293b", fg=color, highlightthickness=0, troughcolor="#05070c", activebackground=color, cursor="hand2")
+        scale = tk.Scale(box, from_=from_val, to=to_val, resolution=res, variable=var, orient=tk.HORIZONTAL, showvalue=False, command=on_change, bg="#1e293b", fg=color, highlightthickness=0, troughcolor="#060911", activebackground=color, cursor="hand2")
         scale.pack(fill=tk.X, pady=1)
-        scale.var = val_var
+        scale.var = var
         return scale
 
-    def on_slider_change(self, tag, val):
-        if tag == "P":
-            self.kp = val
-            if self.kp > 4.5:
-                self.insight_text = f"Kp set to {val:.1f} (HIGH): Aggressive stiffness! Speeds up rise time, but increases oscillations."
-                self.insight_color = "#f43f5e"
-            else:
-                self.insight_text = f"Kp set to {val:.1f}: Restoring spring force adjusted proportionally to error."
-                self.insight_color = "#00f2fe"
-            # Induce a slight disturbance so the user immediately sees the change in behavior!
-            self.velocity += 1.5 * (1.0 if random.random() > 0.5 else -1.0)
-
-        elif tag == "I":
-            self.ki = val
-            if self.ki > 0.2:
-                self.insight_text = f"Ki set to {val:.2f} (STRONG): High integral accumulation! Destroys steady-state error, may cause slow hunting."
-                self.insight_color = "#38bdf8"
-            else:
-                self.insight_text = f"Ki set to {val:.2f}: Integrator summing past errors to eliminate steady-state offset."
-                self.insight_color = "#38bdf8"
-
-        elif tag == "D":
-            self.kd = val
-            if self.kd > 1.5:
-                self.insight_text = f"Kd set to {val:.2f} (HEAVY DAMPING): Acts like high-viscosity shock absorber. Quenches overshoot!"
-                self.insight_color = "#fbbf24"
-            else:
-                self.insight_text = f"Kd set to {val:.2f}: Derivative damper resisting rapid changes in velocity (de/dt)."
-                self.insight_color = "#fbbf24"
-
-        elif tag == "T":
-            self.trigger_step(val)
-            self.insight_text = f"Target Setpoint adjusted to {val:.1f} cm. System responding with transient step maneuver."
-            self.insight_color = "#a78bfa"
-
-        elif tag == "N":
-            self.noise_amplitude = val
-            self.insight_text = f"Acoustic Noise Jitter set to {val:.2f} cm. Exponential Moving Average filter actively smoothing echoes."
-            self.insight_color = "#f43f5e"
-
-        self.insight_lbl.config(text=self.insight_text, fg=self.insight_color)
-
-        if self.mode == "hw" and self.is_hw_connected and self.ser:
-            try:
-                self.ser.write(f"P{self.kp}\nI{self.ki}\nD{self.kd}\nT{self.target}\n".encode())
-            except Exception:
-                pass
-
-    def toggle_system_power(self):
-        self.system_enabled = not self.system_enabled
-        if self.system_enabled:
-            self.btn_power.config(text="● SYSTEM ACTIVE", bg="#059669", activebackground="#10b981")
-            self.card_mode.config(text=f"{self.controller_type} ACTIVE", fg="#10b981")
-            self.insight_text = "System Energized: Actuator driving closed-loop feedback loop."
+    def toggle_rig(self):
+        if self.rig_type == "beam":
+            self.rig_type = "tracker"
+            self.btn_rig.config(text="Rig: 🎯 1-DOF Tracker", bg="#0284c7")
         else:
-            self.btn_power.config(text="● SYSTEM IDLE (OFF)", bg="#be123c", activebackground="#e11d48")
-            self.card_mode.config(text="PAUSED / IDLE", fg="#f43f5e")
-            self.control_output = 0.0
-            self.insight_text = "System De-energized: Actuator output forced to 0. Mechanical plant coasting to rest."
-        self.insight_lbl.config(text=self.insight_text, fg="#f43f5e" if not self.system_enabled else "#10b981")
+            self.rig_type = "beam"
+            self.btn_rig.config(text="Rig: ⚖️ Ball-on-Beam", bg="#4f46e5")
 
-    def toggle_controller_algo(self):
+    def toggle_controller_mode(self):
         if self.controller_type == "PID":
             self.controller_type = "ON_OFF"
-            self.btn_algo.config(text="MODE: ON/OFF BANG-BANG", fg="#f43f5e")
-            self.card_mode.config(text="BANG-BANG ACTIVE", fg="#f43f5e")
-            self.insight_text = "ON/OFF Bang-Bang Active: Actuator slams between full saturation (+/- 35). Produces sustained limit cycles!"
-            self.insight_color = "#f43f5e"
+            self.btn_mode.config(text="Mode: Bang-Bang", bg="#e11d48")
+            self.status_msg.config(text="Mode: ON/OFF (Limit Cycles)", fg="#f43f5e")
         else:
             self.controller_type = "PID"
-            self.btn_algo.config(text="MODE: PID CONTROLLER", fg="#38bdf8")
-            self.card_mode.config(text="PID OPTIMAL", fg="#10b981")
-            self.insight_text = "PID Controller Active: Smooth proportional moderation with integral elimination of offset and derivative damping."
-            self.insight_color = "#10b981"
-        self.insight_lbl.config(text=self.insight_text, fg=self.insight_color)
-        self.trigger_step(self.target)
+            self.btn_mode.config(text="Mode: PID", bg="#0284c7")
+            self.status_msg.config(text="Mode: Closed-Loop PID", fg="#10b981")
 
-    def cycle_env_view(self):
-        """Cycles between: 🌿 Botanical Plants -> 🚗 Vehicle ACC -> 🔬 Lab Bench"""
-        if self.env_view == "plant":
-            self.env_view = "vehicle"
-            self.btn_env.config(text="ENV: 🚗 ROAD / VEHICLE ACC", bg="#2563eb", activebackground="#3b82f6")
-            self.anim_title_lbl.config(text="ENVIRONMENT: 🚗 AUTONOMOUS ELECTRIC VEHICLE - ADAPTIVE CRUISE CONTROL (ACC)", fg="#38bdf8")
-            self.anim_status_lbl.config(text="APPLICATION: HIGHWAY INTER-VEHICLE HEADWAY SPACING & COLLISION MITIGATION")
-            self.sub_header_lbl.config(text="Active Context: 🚗 Real-World Autonomous Driving & Headway Control", fg="#38bdf8")
-        elif self.env_view == "vehicle":
-            self.env_view = "bench"
-            self.btn_env.config(text="ENV: 🔬 LAB BENCH APPARATUS", bg="#7c3aed", activebackground="#8b5cf6")
-            self.anim_title_lbl.config(text="ENVIRONMENT: 🔬 EMBEDDED LABORATORY BENCH - HC-SR04 & MICRO SERVO TRACK", fg="#a78bfa")
-            self.anim_status_lbl.config(text="APPLICATION: 1-DOF PHYSICAL EXPERIMENTAL TESTBED (ARDUINO ATMEGA328P)")
-            self.sub_header_lbl.config(text="Active Context: 🔬 Laboratory Embedded Hardware Prototype (Arduino)", fg="#a78bfa")
+    def toggle_trajectory(self):
+        if self.trajectory_mode == "step":
+            self.trajectory_mode = "sine"
+            self.btn_traj.config(text="Trajectory: 🌊 Sine", bg="#0284c7")
+            self.status_msg.config(text="Tracking: Sine Wave (0.20 Hz)", fg="#38bdf8")
         else:
-            self.env_view = "plant"
-            self.btn_env.config(text="ENV: 🌿 GREENHOUSE PLANTS", bg="#047857", activebackground="#059669")
-            self.anim_title_lbl.config(text="ENVIRONMENT: 🌿 AUTOMATED GREENHOUSE - ULTRASONIC PLANT CANOPY DISTANCE CONTROL", fg="#10b981")
-            self.anim_status_lbl.config(text="APPLICATION: AUTOMATED SPRAY NOZZLE / LIGHTING BOOM HEIGHT REGULATION", fg="#64748b")
-            self.sub_header_lbl.config(text="Active Context: 🌿 Smart Agriculture / Botanical Canopy Distance Keeping", fg="#10b981")
+            self.trajectory_mode = "step"
+            self.btn_traj.config(text="Trajectory: Step", bg="#059669")
+            self.status_msg.config(text="Tracking: Stationary Setpoint", fg="#10b981")
 
-    def trigger_step(self, new_target):
-        self.target = new_target
-        self.slider_target.var.set(new_target)
-        self.step_start_time = time.time()
-        self.step_initial_pos = self.position
-        self.step_monitoring = True
-        self.rise_time = 0.0
-        self.settling_time = 0.0
-        self.peak_overshoot = 0.0
+    def load_replay_csv(self, filepath=None):
+        if self.mode == "replay":
+            self.mode = "sim"
+            self.btn_replay.config(text="📼 Replay CSV", bg="#6366f1")
+            self.status_msg.config(text="Mode: Closed-Loop PID Simulation", fg="#10b981")
+            self.hw_replay_pos = None
+            return
+
+        if not filepath:
+            from tkinter import filedialog
+            filepath = filedialog.askopenfilename(
+                title="Select Hardware CSV Log for Replay",
+                initialdir="logs",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+            if not filepath:
+                import os
+                if os.path.exists("logs/sample_hardware_step_test.csv"):
+                    filepath = "logs/sample_hardware_step_test.csv"
+                else:
+                    return
+
+        try:
+            import os
+            import numpy as np
+            data = np.genfromtxt(filepath, delimiter=',', names=True)
+            self.replay_data = {
+                't': data['timestamp'],
+                'r': data['setpoint'],
+                'y_hw': data['distance'],
+                'servo': data['servo_angle'],
+                'kp': float(data['Kp'][0]) if 'Kp' in data.dtype.names else 2.40,
+                'ki': float(data['Ki'][0]) if 'Ki' in data.dtype.names else 0.04,
+                'kd': float(data['Kd'][0]) if 'Kd' in data.dtype.names else 0.90
+            }
+            self.s_kp.var.set(self.replay_data['kp'])
+            self.s_ki.var.set(self.replay_data['ki'])
+            self.s_kd.var.set(self.replay_data['kd'])
+            self.on_param_update()
+
+            self.mode = "replay"
+            self.trajectory_mode = "step"
+            self.replay_idx = 0
+            self.position = float(self.replay_data['y_hw'][0])
+            self.velocity = 0.0
+            self.target = float(self.replay_data['r'][0])
+            self.replay_sq_errs = []
+            self.replay_rmse = 0.0
+            self.btn_replay.config(text="⏹ Stop Replay", bg="#e11d48")
+            fname = os.path.basename(filepath)
+            self.status_msg.config(text=f"Replaying: {fname} (Hardware vs Sim)", fg="#f59e0b")
+        except Exception as e:
+            messagebox.showerror("Replay Error", f"Failed to load CSV: {e}")
+
+    def set_target(self, val):
+        self.trajectory_mode = "step"
+        self.btn_traj.config(text="Trajectory: Step", bg="#059669")
+        self.target = float(val)
+        self.s_target.var.set(val)
+        self.on_param_update()
+
+    def on_param_update(self):
+        self.kp = self.s_kp.var.get()
+        self.ki = self.s_ki.var.get()
+        self.kd = self.s_kd.var.get()
+        if self.trajectory_mode == "step":
+            self.target = self.s_target.var.get()
+
         if self.mode == "hw" and self.is_hw_connected and self.ser:
             try:
-                self.ser.write(f"T{new_target}\n".encode())
+                cmd = f"P{self.kp}\nI{self.ki}\nD{self.kd}\nT{self.target}\n"
+                self.ser.write(cmd.encode())
             except Exception:
                 pass
 
-    def inject_nudge(self):
-        self.position = min(48.0, self.position + 8.0)
-        self.velocity += 18.0
-        self.step_start_time = time.time()
-        self.step_monitoring = True
-        self.insight_text = "Physical Impulse Injected (+8 cm): Derivative term immediately reacting to velocity jump (de/dt) to arrest displacement!"
-        self.insight_color = "#f43f5e"
-        self.insight_lbl.config(text=self.insight_text, fg=self.insight_color)
+    def bind_shortcuts(self):
+        self.bind("<space>", lambda e: self.toggle_pause())
+        self.bind("<Key-n>", lambda e: self.apply_nudge())
+        self.bind("<Key-r>", lambda e: self.reset_metrics())
 
-    def reset_integrator(self):
-        self.integral = 0.0
-        self.insight_text = "Integrator Reset: Cumulative past error cleared to zero."
-        self.insight_lbl.config(text=self.insight_text, fg="#cbd5e1")
+    def on_rig_click(self, event):
+        mx, my = event.x, event.y
+        w = self.anim_canvas.winfo_width()
+        bx, by = self.last_ball_pixel_pos
+        sx, sy = self.last_servo_pixel_pos
+
+        if (mx - bx)**2 + (my - by)**2 < 25**2:
+            self.is_dragging_ball = True
+            self.velocity = 0.0
+            return
+
+        if (mx - sx)**2 + (my - sy)**2 < 28**2:
+            self.is_dragging_servo = True
+            return
+
+        start_x = 90
+        end_x = w - 160
+        if start_x <= mx <= end_x:
+            frac = (mx - start_x) / (end_x - start_x)
+            new_tgt = round(3.5 + frac * 44.0, 1)
+            self.set_target(new_tgt)
+
+    def on_rig_drag(self, event):
+        mx, my = event.x, event.y
+        w = self.anim_canvas.winfo_width()
+        start_x = 90
+        end_x = w - 160
+
+        if self.is_dragging_ball:
+            frac = max(0.0, min(1.0, (mx - start_x) / (end_x - start_x)))
+            self.position = 3.5 + frac * 44.0
+            self.velocity = 0.0
+            self.reset_metrics()
+        elif self.is_dragging_servo:
+            sx, sy = self.last_servo_pixel_pos
+            angle_rad = math.atan2(my - sy, mx - sx)
+            deg = math.degrees(angle_rad) + 180.0
+            self.servo_angle = max(20.0, min(160.0, deg))
+
+    def on_rig_release(self, event):
+        self.is_dragging_ball = False
+        self.is_dragging_servo = False
+
+    def toggle_ema(self):
+        self.use_ema_filter = not self.use_ema_filter
+        if self.use_ema_filter:
+            self.btn_ema.config(text="EMA Filter: ON", bg="#10b981")
+        else:
+            self.btn_ema.config(text="EMA Filter: OFF", bg="#b91c1c")
+
+    def apply_disturbance(self, dist_type):
+        self.recovery_start_time = time.time()
+        self.recovery_in_progress = True
+        self.reset_metrics()
+
+        if dist_type == "wind":
+            self.constant_wind = 4.5
+            self.status_msg.config(text="Disturbance: Wind (+4.5 N side force)", fg="#f59e0b")
+        elif dist_type == "dropout":
+            self.sensor_dropout_until = time.time() + 1.2
+            self.status_msg.config(text="Disturbance: Sensor Echo Dropout (1.2s)", fg="#ef4444")
+        elif dist_type == "burst":
+            self.noise_burst_until = time.time() + 1.0
+            self.status_msg.config(text="Disturbance: Acoustic Noise Burst!", fg="#c084fc")
+
+    def toggle_pause(self):
+        self.is_paused = not self.is_paused
+        if self.is_paused:
+            self.btn_pause.config(text="▶ Resume", bg="#0284c7")
+        else:
+            self.btn_pause.config(text="⏸ Pause", bg="#1e293b")
+
+    def step_once(self):
+        if not self.is_paused:
+            self.toggle_pause()
+        self.physics_step(0.03)
+        self.update_buffers()
+        self.draw_mechanical_rig()
+        self.draw_graph()
+
+    def set_speed(self, spd):
+        self.speed_multiplier = float(spd)
+
+    def on_scope_scroll(self, event):
+        if event.delta > 0:
+            self.zoom_scope(-10)
+        else:
+            self.zoom_scope(10)
+
+    def zoom_scope(self, delta):
+        new_len = max(40, min(300, self.buf_len + delta))
+        if new_len != self.buf_len:
+            if new_len > self.buf_len:
+                pad = new_len - self.buf_len
+                self.target_buf = [self.target_buf[0]] * pad + self.target_buf
+                self.pos_buf = [self.pos_buf[0]] * pad + self.pos_buf
+                self.err_buf = [self.err_buf[0]] * pad + self.err_buf
+                self.servo_buf = [self.servo_buf[0]] * pad + self.servo_buf
+            else:
+                cut = self.buf_len - new_len
+                self.target_buf = self.target_buf[cut:]
+                self.pos_buf = self.pos_buf[cut:]
+                self.err_buf = self.err_buf[cut:]
+                self.servo_buf = self.servo_buf[cut:]
+            self.buf_len = new_len
+            self.lbl_zoom.config(text=f"{140/self.buf_len:.1f}x Zoom")
+
+    def on_scope_hover(self, event):
+        self.hover_x = event.x
+        self.hover_y = event.y
+
+    def on_scope_leave(self, event):
+        self.hover_x = None
+        self.hover_y = None
+
+    def apply_nudge(self):
+        self.position = min(46.0, self.position + 10.0)
+        self.velocity += 14.0
+        self.recovery_start_time = time.time()
+        self.recovery_in_progress = True
+        self.reset_metrics()
+        self.status_msg.config(text="Disturbance: Manual Push (+10 cm)!", fg="#ef4444")
+
+    def reset_metrics(self):
+        self.step_start_time = time.time()
+        self.step_iae = 0.0
+        self.step_itae = 0.0
+        self.prev_step_target = self.target
 
     def refresh_ports(self):
         if SERIAL_AVAILABLE:
@@ -429,7 +537,7 @@ class PIDPhysicsSimulator(tk.Tk):
         else:
             self.port_combo['values'] = ["No COM"]
 
-    def toggle_hw_connection(self):
+    def toggle_serial(self):
         if not SERIAL_AVAILABLE:
             messagebox.showerror("Error", "PySerial is not installed.")
             return
@@ -442,18 +550,18 @@ class PIDPhysicsSimulator(tk.Tk):
                 self.ser = serial.Serial(port, 115200, timeout=0.1)
                 self.is_hw_connected = True
                 self.mode = "hw"
-                self.btn_hw_connect.config(text="DISCONNECT", bg="#be123c", fg="white")
-                threading.Thread(target=self.hw_read_loop, daemon=True).start()
+                self.btn_hw.config(text="Disconnect", bg="#e11d48")
+                threading.Thread(target=self.serial_reader, daemon=True).start()
             except Exception as e:
-                messagebox.showerror("Serial Error", str(e))
+                messagebox.showerror("Error", str(e))
         else:
             self.is_hw_connected = False
             if self.ser and self.ser.is_open:
                 self.ser.close()
-            self.btn_hw_connect.config(text="USB", bg="#1e293b", fg="#94a3b8")
+            self.btn_hw.config(text="USB", bg="#1e293b")
             self.mode = "sim"
 
-    def hw_read_loop(self):
+    def serial_reader(self):
         while self.is_hw_connected and self.ser and self.ser.is_open:
             try:
                 line = self.ser.readline().decode('utf-8', errors='ignore').strip()
@@ -468,141 +576,125 @@ class PIDPhysicsSimulator(tk.Tk):
                     self.position = d.get("Distance", self.position)
                     self.smoothed_dist = self.position
                     self.servo_angle = d.get("Servo", self.servo_angle)
-                    self.control_output = d.get("Output", 0.0)
-                    self.p_term = d.get("P", 0.0)
-                    self.i_term = d.get("I", 0.0)
-                    self.d_term = d.get("D", 0.0)
             except Exception:
                 pass
             time.sleep(0.01)
 
     def physics_step(self, dt):
-        """Simulates 2nd-order dynamic physical plant with noise and selected controller"""
-        if not self.system_enabled:
-            self.control_output = 0.0
-            self.p_term = 0.0
-            self.i_term = 0.0
-            self.d_term = 0.0
-            self.servo_angle = 90.0
-            self.velocity *= 0.94
-            self.position += self.velocity * dt
+        if self.mode == "hw":
             return
 
-        # 1. Ultrasonic acoustic measurement with realistic jitter
-        jitter = random.gauss(0, self.noise_amplitude) if self.noise_amplitude > 0 else 0.0
-        self.raw_dist = max(2.0, min(50.0, self.position + jitter))
+        dt = dt * self.speed_multiplier
 
-        # 2. Pre-filter (Exponential Moving Average)
-        self.smoothed_dist = (self.alpha_ema * self.raw_dist) + ((1.0 - self.alpha_ema) * self.smoothed_dist)
+        # Replay Mode Handler (C2)
+        if self.mode == "replay" and self.replay_data:
+            idx = self.replay_idx
+            N = len(self.replay_data['t'])
+            if idx < N:
+                self.target = float(self.replay_data['r'][idx])
+                self.hw_replay_pos = float(self.replay_data['y_hw'][idx])
+                sq_e = (self.position - self.hw_replay_pos) ** 2
+                self.replay_sq_errs.append(sq_e)
+                self.replay_rmse = math.sqrt(sum(self.replay_sq_errs) / len(self.replay_sq_errs))
+                self.replay_idx += 1
+            else:
+                self.replay_idx = 0
+                self.replay_sq_errs = []
+        elif self.trajectory_mode == "sine":
+            # Trajectory Generator
+            self.traj_time += dt
+            self.target = 22.0 + self.sine_amp * math.sin(2.0 * math.pi * self.sine_freq * self.traj_time)
+            self.s_target.var.set(round(self.target, 1))
+
+        # Check for step setpoint transition (A8)
+        if abs(self.target - self.prev_step_target) > 0.4:
+            self.step_start_time = time.time()
+            self.step_iae = 0.0
+            self.step_itae = 0.0
+            self.prev_step_target = self.target
+
+        # Ultrasonic Noise & Filter (A4, A5)
+        now_ts = time.time()
+        if now_ts < self.sensor_dropout_until:
+            raw_dist = 0.0 # Dropped echo
+        elif now_ts < self.noise_burst_until:
+            raw_dist = max(2.0, min(50.0, self.position + random.gauss(0, 3.2)))
+        else:
+            noise = random.gauss(0, self.noise_amp)
+            raw_dist = max(2.0, min(50.0, self.position + noise))
+
+        if self.use_ema_filter and raw_dist > 0.5:
+            self.smoothed_dist = (self.alpha_dist * raw_dist) + ((1.0 - self.alpha_dist) * self.smoothed_dist)
+        else:
+            self.smoothed_dist = raw_dist
+
         error = self.target - self.smoothed_dist
 
-        # 3. Controller Execution: PID vs ON/OFF Bang-Bang
+        # Check Disturbance Recovery (A4)
+        if self.recovery_in_progress and self.recovery_start_time:
+            if abs(error) < 0.6 and abs(self.velocity) < 1.5:
+                t_rec = time.time() - self.recovery_start_time
+                self.status_msg.config(text=f"Recovered in {t_rec:.2f}s (Error < 0.6cm)", fg="#10b981")
+                self.recovery_in_progress = False
+                self.constant_wind = 0.0
+
+        # A8 Metrics: Cumulative Step IAE [cm*s] & ITAE [cm*s^2]
+        t_elapsed = max(0.0, time.time() - self.step_start_time)
+        self.step_iae += abs(error) * dt
+        self.step_itae += t_elapsed * abs(error) * dt
+
+        # Control Algorithm
         if self.controller_type == "ON_OFF":
-            deadband = 0.8
-            if error > deadband:
-                self.control_output = +35.0
-            elif error < -deadband:
-                self.control_output = -35.0
+            if error > 0.8:
+                self.control_output = 28.0
+            elif error < -0.8:
+                self.control_output = -28.0
             else:
                 self.control_output = 0.0
-            self.p_term = self.control_output
-            self.i_term = 0.0
-            self.d_term = 0.0
             self.servo_angle = 90.0 + self.control_output
         else:
-            ctrl_error = 0.0 if abs(error) < 0.6 else error
-            self.p_term = self.kp * ctrl_error
+            ctrl_error = 0.0 if abs(error) < 0.4 else error
+            P = self.kp * ctrl_error
 
-            # Integral with Anti-Windup
             self.integral += ctrl_error * dt
-            self.integral = max(-40.0, min(40.0, self.integral))
-            self.i_term = self.ki * self.integral
+            self.integral = max(-35.0, min(35.0, self.integral))
+            I = self.ki * self.integral
 
-            # Derivative with Low-Pass Filter
-            raw_deriv = (ctrl_error - self.prev_error) / dt if dt > 0 else 0.0
-            self.filtered_derivative = (self.alpha_deriv * raw_deriv) + ((1.0 - self.alpha_deriv) * self.filtered_derivative)
-            self.d_term = self.kd * self.filtered_derivative
+            raw_d = (ctrl_error - self.prev_error) / dt if dt > 0 else 0.0
+            self.filtered_deriv = (self.alpha_d * raw_d) + ((1.0 - self.alpha_d) * self.filtered_deriv)
+            D = self.kd * self.filtered_deriv
             self.prev_error = ctrl_error
 
-            self.control_output = self.p_term + self.i_term + self.d_term
-            self.servo_angle = max(20.0, min(160.0, 90.0 + self.control_output))
+            self.control_output = P + I + D
+            self.servo_angle = max(25.0, min(155.0, 90.0 + self.control_output))
 
-        # 4. Second-Order Plant Dynamics
-        tilt_rad = math.radians(self.servo_angle - 90.0)
-        actuator_force = 125.0 * math.sin(tilt_rad)
-        damping_force = -self.plant_damping * self.velocity
+        # Dynamics
+        if self.rig_type == "beam":
+            self.beam_angle = (self.servo_angle - 90.0) * 0.35 # max +/- 22 deg
+            g = 980.0 # cm/s^2
+            theta_rad = math.radians(self.beam_angle)
+            damping_term = (self.plant_damping * self.velocity) if self.use_friction else 0.0
+            self.acceleration = (5.0 / 7.0) * g * math.sin(theta_rad) - damping_term + self.constant_wind
+            self.velocity += self.acceleration * dt
+            self.position += self.velocity * dt
+            self.ball_rotation = (self.ball_rotation + (self.velocity * dt / 0.15)) % 360.0
+        else:
+            tilt_rad = math.radians(self.servo_angle - 90.0)
+            damping_term = (self.plant_damping * self.velocity) if self.use_friction else 0.0
+            net_force = 120.0 * math.sin(tilt_rad) - damping_term + self.constant_wind
+            self.acceleration = net_force / self.plant_mass
+            self.velocity += self.acceleration * dt
+            self.position += self.velocity * dt
 
-        net_force = actuator_force + damping_force
-        acceleration = net_force / self.plant_mass
+        # Boundaries
+        if self.position <= 3.5:
+            self.position = 3.5
+            self.velocity = -0.3 * self.velocity
+        elif self.position >= 47.5:
+            self.position = 47.5
+            self.velocity = -0.3 * self.velocity
 
-        self.velocity += acceleration * dt
-        self.position += self.velocity * dt
-
-        if self.position <= 2.0:
-            self.position = 2.0
-            self.velocity = 0.0
-        elif self.position >= 50.0:
-            self.position = 50.0
-            self.velocity = 0.0
-
-        # 5. Calculate transient response metrics
-        if self.step_monitoring:
-            elapsed = time.time() - self.step_start_time
-            step_mag = abs(self.target - self.step_initial_pos)
-            if step_mag > 1.0:
-                if self.rise_time == 0.0:
-                    fraction = (self.position - self.step_initial_pos) / (self.target - self.step_initial_pos)
-                    if fraction >= 0.90:
-                        self.rise_time = elapsed
-
-                if (self.target > self.step_initial_pos and self.position > self.target) or (self.target < self.step_initial_pos and self.position < self.target):
-                    overshoot_cm = abs(self.position - self.target)
-                    pct = (overshoot_cm / step_mag) * 100.0
-                    if pct > self.peak_overshoot:
-                        self.peak_overshoot = pct
-
-                if abs(error) <= (0.05 * step_mag) and elapsed > 0.6:
-                    if self.settling_time == 0.0:
-                        self.settling_time = elapsed
-                else:
-                    if elapsed > self.settling_time > 0.0 and abs(error) > (0.05 * step_mag):
-                        self.settling_time = 0.0
-
-        self.steady_state_error = abs(error)
-
-    def draw_meters(self):
-        """Draws live dynamic P, I, D Action Contribution Bars"""
-        # P Meter
-        self.render_action_bar(self.bar_p_canvas, self.p_term, 30.0, "#00f2fe")
-        # I Meter
-        self.render_action_bar(self.bar_i_canvas, self.i_term, 20.0, "#38bdf8")
-        # D Meter
-        self.render_action_bar(self.bar_d_canvas, self.d_term, 20.0, "#fbbf24")
-
-    def render_action_bar(self, c, val, max_scale, color):
-        c.delete("all")
-        w = c.winfo_width()
-        h = c.winfo_height()
-        if w < 20 or h < 6:
-            return
-
-        mid_x = w / 2
-        norm = max(-1.0, min(1.0, val / max_scale))
-        bar_w = norm * (w / 2 - 4)
-
-        # Center line
-        c.create_line(mid_x, 0, mid_x, h, fill="#334155", width=1)
-
-        # Active bar
-        if bar_w > 0:
-            c.create_rectangle(mid_x, 2, mid_x + bar_w, h - 2, fill=color, outline="")
-        elif bar_w < 0:
-            c.create_rectangle(mid_x + bar_w, 2, mid_x, h - 2, fill=color, outline="")
-
-        sign = "+" if val > 0 else ""
-        c.val_lbl.config(text=f"{sign}{val:.1f} N")
-
-    def draw_animation(self):
+    def draw_mechanical_rig(self):
         c = self.anim_canvas
         c.delete("all")
         w = c.winfo_width()
@@ -610,366 +702,375 @@ class PIDPhysicsSimulator(tk.Tk):
         if w < 50 or h < 50:
             return
 
-        if self.env_view == "plant":
-            self.draw_greenhouse_plant_environment(c, w, h)
-        elif self.env_view == "vehicle":
-            self.draw_vehicle_environment(c, w, h)
+        if self.rig_type == "beam":
+            self.draw_ball_and_beam(c, w, h)
         else:
-            self.draw_bench_apparatus(c, w, h)
+            self.draw_linear_tracker(c, w, h)
 
-    def draw_greenhouse_plant_environment(self, c, w, h):
-        """Draws realistic Botanical Greenhouse: potted plants, foliage, overhead boom with ultrasonic nozzle"""
-        ground_y = h - 28
+    def draw_ball_and_beam(self, c, w, h):
+        pivot_x = w // 2 - 40
+        pivot_y = h - 45
+        beam_len = w - 240
 
-        # 1. Greenhouse Architecture (Glass panels and steel trusses)
-        c.create_rectangle(0, 0, w, ground_y, fill="#051410", outline="")
-        for glass_x in range(0, w, 110):
-            c.create_line(glass_x, 0, glass_x + 50, ground_y, fill="#0d2b20", width=1)
-            c.create_line(glass_x + 50, 0, glass_x, ground_y, fill="#0d2b20", width=1)
+        # Fulcrum
+        c.create_polygon(pivot_x - 18, pivot_y + 28, pivot_x + 18, pivot_y + 28, pivot_x, pivot_y, fill="#1e293b", outline="#475569", width=2)
+        c.create_oval(pivot_x - 5, pivot_y - 5, pivot_x + 5, pivot_y + 5, fill="#94a3b8")
 
-        # Greenhouse floor (soil / brick pavers)
-        c.create_rectangle(0, ground_y, w, h, fill="#2b1810", outline="#45271a")
+        # Beam Geometry
+        ang_rad = math.radians(self.beam_angle)
+        half_len = beam_len / 2.0
+        x1 = pivot_x - half_len * math.cos(ang_rad)
+        y1 = pivot_y + half_len * math.sin(ang_rad)
+        x2 = pivot_x + half_len * math.cos(ang_rad)
+        y2 = pivot_y - half_len * math.sin(ang_rad)
 
-        # Track mapping
-        track_start_x = 130
-        track_end_x = w - 120
-        track_len = track_end_x - track_start_x
+        # Beam
+        c.create_line(x1, y1 + 3, x2, y2 + 3, fill="#030712", width=6)
+        c.create_line(x1, y1, x2, y2, fill="#0284c7", width=5)
+        c.create_line(x1, y1, x2, y2, fill="#38bdf8", width=2)
 
-        # 2. Automated Ultrasonic Boom Carriage (Left side: Mounted on gantry)
-        gantry_x = track_start_x - 55
-        gantry_y = ground_y - 45
+        # HC-SR04 on Left Beam Tip
+        c.create_rectangle(x1 - 10, y1 - 15, x1 + 10, y1 + 15, fill="#0284c7", outline="#38bdf8", width=2)
+        c.create_oval(x1 + 4, y1 - 12, x1 + 12, y1 - 4, fill="#cbd5e1")
+        c.create_oval(x1 + 4, y1 + 4, x1 + 12, y1 + 12, fill="#cbd5e1")
+        c.create_text(x1 - 4, y1 - 22, text="HC-SR04", fill="#38bdf8", font=("Segoe UI", 7, "bold"))
 
-        # Overhead aluminum gantry rail
-        c.create_line(gantry_x - 40, gantry_y - 25, w - 20, gantry_y - 25, fill="#64748b", width=3)
+        # Rolling Ball (Controlled Plant)
+        pos_frac = (self.position - 3.5) / 44.0
+        ball_x = x1 + pos_frac * (x2 - x1)
+        ball_y = y1 + pos_frac * (y2 - y1) - 10
+        self.last_ball_pixel_pos = (ball_x, ball_y)
 
-        # Boom Carriage
-        c.create_rectangle(gantry_x - 22, gantry_y - 32, gantry_x + 22, gantry_y + 10, fill="#1e293b", outline="#38bdf8", width=2)
-        # HC-SR04 Transducer pod facing right towards plants
-        c.create_rectangle(gantry_x + 22, gantry_y - 14, gantry_x + 30, gantry_y + 4, fill="#0984e3", outline="#ffffff")
-        c.create_oval(gantry_x + 30, gantry_y - 12, gantry_x + 36, gantry_y - 4, fill="#e2e8f0")
-        c.create_oval(gantry_x + 30, gantry_y - 2, gantry_x + 36, gantry_y + 6, fill="#e2e8f0")
-        # Water/Mist Nozzle on Boom
-        c.create_polygon(gantry_x + 18, gantry_y + 10, gantry_x + 28, gantry_y + 18, gantry_x + 8, gantry_y + 18, fill="#fbbf24")
-        c.create_text(gantry_x - 2, gantry_y - 42, text="AUTOMATED GANTRY BOOM", fill="#38bdf8", font=("Segoe UI", 7, "bold"))
+        # Ball Shadow
+        c.create_oval(ball_x - 7, ball_y + 6, ball_x + 7, ball_y + 11, fill="#030712", outline="")
 
-        # Animated Spray Mist from nozzle
-        if self.system_enabled:
-            self.spray_phase = (self.spray_phase + 0.2) % 1.0
-            for sp_i in range(4):
-                sp_x = gantry_x + 24 + sp_i * 8
-                sp_y = gantry_y + 18 + sp_i * 4
-                c.create_oval(sp_x, sp_y, sp_x + 3, sp_y + 3, fill="#38bdf8", outline="")
+        # 3D Shaded Metallic Ball
+        c.create_oval(ball_x - 9, ball_y - 9, ball_x + 9, ball_y + 9, fill="#f59e0b", outline="#fbbf24", width=2)
+        c.create_oval(ball_x - 6, ball_y - 6, ball_x - 2, ball_y - 2, fill="#ffffff", outline="")
 
-        # 3. Botanical Foliage & Plant Canopy (Target Plant)
-        pos_clamped = max(0.0, min(50.0, self.position))
-        plant_x = track_start_x + (pos_clamped / 50.0) * track_len
-        plant_y = ground_y
+        # Rotating Spokes
+        rot_rad = math.radians(self.ball_rotation)
+        dx = 7 * math.cos(rot_rad)
+        dy = 7 * math.sin(rot_rad)
+        c.create_line(ball_x - dx, ball_y - dy, ball_x + dx, ball_y + dy, fill="#78350f", width=2)
+        c.create_line(ball_x + dy, ball_y - dx, ball_x - dy, ball_y + dx, fill="#78350f", width=2)
 
-        # Gentle natural plant sway animation
-        self.plant_sway = math.sin(time.time() * 2.5) * 3.0
+        # Ball Label: Placed BELOW the beam to completely prevent text collision!
+        c.create_text(ball_x, ball_y + 20, text=f"{self.position:.1f} cm", fill="#fbbf24", font=("Consolas", 8, "bold"))
 
-        # Terracotta Plant Pot
-        pot_w = 26
-        c.create_polygon(plant_x - pot_w, plant_y, plant_x + pot_w, plant_y, plant_x + pot_w - 6, plant_y + 24, plant_x - pot_w + 6, plant_y + 24, fill="#c2410c", outline="#ea580c", width=1)
-        c.create_rectangle(plant_x - pot_w - 2, plant_y - 4, plant_x + pot_w + 2, plant_y, fill="#9a3412", outline="")
+        # Ghost ball for hardware replay (C2)
+        if self.mode == "replay" and self.hw_replay_pos is not None:
+            hw_frac = max(0.0, min(1.0, (self.hw_replay_pos - 3.5) / 44.0))
+            hw_bx = x1 + hw_frac * (x2 - x1)
+            hw_by = y1 + hw_frac * (y2 - y1) - 10
+            c.create_oval(hw_bx - 9, hw_by - 9, hw_bx + 9, hw_by + 9, outline="#f59e0b", width=2, dash=(2, 2))
+            c.create_text(hw_bx, hw_by - 16, text=f"HW {self.hw_replay_pos:.1f}", fill="#f59e0b", font=("Consolas", 6, "bold"))
 
-        # Plant Stems and Lush Foliage
-        stem_top_x = plant_x + self.plant_sway
-        stem_top_y = plant_y - 65
-        c.create_line(plant_x, plant_y, stem_top_x, stem_top_y, fill="#15803d", width=4)
+        # Target Setpoint Flag: Placed strictly ABOVE the beam!
+        tgt_frac = (self.target - 3.5) / 44.0
+        tx = x1 + tgt_frac * (x2 - x1)
+        ty = y1 + tgt_frac * (y2 - y1)
+        c.create_line(tx, ty - 26, tx, ty, fill="#38bdf8", width=2, dash=(2, 2))
+        c.create_polygon(tx, ty - 26, tx + 10, ty - 21, tx, ty - 16, fill="#38bdf8")
+        c.create_text(tx, ty - 32, text=f"Target: {self.target:.0f}cm", fill="#38bdf8", font=("Segoe UI", 7, "bold"))
 
-        # Big Leafy Canopy (Monstera / Ficus style leaves)
-        for leaf_offset in [-25, 0, 25]:
-            lx = stem_top_x + leaf_offset
-            ly = stem_top_y + abs(leaf_offset) * 0.4
-            c.create_oval(lx - 18, ly - 14, lx + 18, ly + 14, fill="#16a34a", outline="#4ade80", width=1.5)
-            c.create_line(lx - 12, ly, lx + 12, ly, fill="#86efac", width=1)
+        # Sound Waves
+        self.wave_phase = (self.wave_phase + 0.18) % 1.0
+        gap_span = (ball_x - x1)
+        if gap_span > 20:
+            for arc_i in range(3):
+                prog = (self.wave_phase + arc_i * 0.33) % 1.0
+                wx = x1 + gap_span * prog
+                wy = y1 + (ball_y - y1) * prog
+                c.create_arc(wx - 7, wy - 7, wx + 7, wy + 7, start=-40, extent=80, style=tk.ARC, outline="#38bdf8", width=1.5)
 
-        c.create_text(plant_x, stem_top_y - 24, text=f"PLANT CANOPY ({self.position:.1f} cm)", fill="#4ade80", font=("Segoe UI", 8, "bold"))
+        # Dynamic Real-Time Physics Vectors
+        if self.show_vectors:
+            # 1. Velocity (Green arrow)
+            v_len = max(-40.0, min(40.0, self.velocity * 2.2))
+            if abs(v_len) > 1.5:
+                vx = ball_x + v_len * math.cos(ang_rad)
+                vy = ball_y - v_len * math.sin(ang_rad)
+                c.create_line(ball_x, ball_y, vx, vy, fill="#34d399", width=2.5, arrow=tk.LAST)
+                c.create_text(vx, vy - 8, text="v", fill="#34d399", font=("Segoe UI", 7, "bold"))
 
-        # 4. Target Setpoint Flag Marker
-        setpoint_clamped = max(0.0, min(50.0, self.target))
-        sp_x = track_start_x + (setpoint_clamped / 50.0) * track_len
-        c.create_line(sp_x, ground_y - 75, sp_x, ground_y, fill="#00f2fe", width=2, dash=(3, 3))
-        c.create_polygon(sp_x, ground_y - 75, sp_x + 14, ground_y - 67, sp_x, ground_y - 59, fill="#00f2fe")
-        c.create_text(sp_x, ground_y - 84, text=f"DESIRED GAP: {self.target:.1f} cm", fill="#00f2fe", font=("Segoe UI", 8, "bold"))
+            # 2. Gravity Acceleration (Yellow arrow)
+            acc_len = max(-35.0, min(35.0, self.acceleration * 0.22))
+            if abs(acc_len) > 1.5:
+                ax = ball_x + acc_len * math.cos(ang_rad)
+                ay = ball_y - acc_len * math.sin(ang_rad) - 14
+                c.create_line(ball_x, ball_y - 14, ax, ay, fill="#fbbf24", width=2, arrow=tk.LAST)
+                c.create_text(ax, ay - 6, text="a_grav", fill="#fbbf24", font=("Segoe UI", 6, "bold"))
 
-        # 5. Animated Sonar Waves Bouncing off Plant Canopy Leaves
-        if self.system_enabled:
-            self.wave_phase = (self.wave_phase + 0.16) % 1.0
-            gap_span = (plant_x - 18 - (gantry_x + 36))
-            if gap_span > 20:
-                for arc_i in range(3):
-                    prog = (self.wave_phase + arc_i * 0.33) % 1.0
-                    ax = (gantry_x + 36) + (gap_span * prog)
-                    ay = gantry_y - 4
-                    r_span = 12 + 16 * prog
-                    c.create_arc(ax - r_span, ay - r_span, ax + r_span, ay + r_span, start=-45, extent=90, style=tk.ARC, outline="#00f2fe", width=2)
+            # 3. PID Thrust (Cyan arrow)
+            f_len = max(-35.0, min(35.0, self.control_output * 1.3))
+            if abs(f_len) > 1.5:
+                fx = ball_x - f_len * math.cos(ang_rad)
+                fy = ball_y + f_len * math.sin(ang_rad)
+                c.create_line(ball_x, ball_y, fx, fy, fill="#00f2fe", width=2, arrow=tk.LAST)
 
-        # 6. Real-time Force Vectors on Plant
-        if abs(self.control_output) > 1.0:
-            force_len = max(-45, min(45, self.control_output * 1.5))
-            f_col = "#00f2fe" if force_len > 0 else "#f43f5e"
-            c.create_line(plant_x, stem_top_y, plant_x + force_len, stem_top_y, fill=f_col, width=3, arrow=tk.LAST)
-            c.create_text(plant_x + force_len / 2, stem_top_y - 12, text="F_PID", fill=f_col, font=("Segoe UI", 7, "bold"))
+        # Servo Motor on Right
+        servo_x = w - 75
+        servo_y = h - 45
+        self.last_servo_pixel_pos = (servo_x, servo_y)
+        c.create_rectangle(servo_x - 18, servo_y - 18, servo_x + 18, servo_y + 18, fill="#0284c7", outline="#38bdf8", width=1.5)
+        c.create_oval(servo_x - 5, servo_y - 5, servo_x + 5, servo_y + 5, fill="#ffffff")
 
-    def draw_vehicle_environment(self, c, w, h):
-        """Draws realistic automotive scene: Highway, Autonomous Cyber-Rover with Sonar, Lead Car"""
-        horizon_y = int(h * 0.40)
-        road_bottom_y = h
+        horn_rad = math.radians(self.servo_angle - 180)
+        hx = servo_x + 20 * math.cos(horn_rad)
+        hy = servo_y + 20 * math.sin(horn_rad)
+        c.create_line(servo_x, servo_y, hx, hy, fill="#fbbf24", width=3)
+        c.create_line(hx, hy, x2, y2, fill="#94a3b8", width=1.5, dash=(3, 2))
+        c.create_text(servo_x, servo_y + 24, text=f"Servo: {int(self.servo_angle)}°", fill="#fbbf24", font=("Consolas", 7, "bold"))
 
-        # Sky Gradient
-        sky_colors = ["#090d16", "#0f172a", "#1e293b", "#334155", "#475569"]
-        for idx, col in enumerate(sky_colors):
-            y1 = int(horizon_y * (idx / len(sky_colors)))
-            y2 = int(horizon_y * ((idx + 1) / len(sky_colors)))
-            c.create_rectangle(0, y1, w, y2, fill=col, outline="")
+    def draw_linear_tracker(self, c, w, h):
+        track_y = h - 35
+        start_x = 90
+        end_x = w - 160
+        track_w = end_x - start_x
 
-        # Mountains
-        c.create_polygon(0, horizon_y, 90, horizon_y - 25, 210, horizon_y, fill="#0f172a", outline="")
-        c.create_polygon(160, horizon_y, 310, horizon_y - 35, 460, horizon_y, fill="#131b2e", outline="")
-        c.create_polygon(400, horizon_y, 580, horizon_y - 30, 760, horizon_y, fill="#0f172a", outline="")
-        c.create_polygon(700, horizon_y, 880, horizon_y - 40, w, horizon_y, fill="#131b2e", outline="")
+        c.create_line(start_x - 10, track_y, end_x + 10, track_y, fill="#334155", width=2)
+        for cm in range(0, 55, 10):
+            tx = start_x + (cm / 50.0) * track_w
+            c.create_line(tx, track_y, tx, track_y + 5, fill="#64748b", width=1)
+            c.create_text(tx, track_y + 14, text=f"{cm}cm", fill="#94a3b8", font=("Consolas", 7))
 
-        # Roadside Verge
-        c.create_rectangle(0, horizon_y, w, road_bottom_y, fill="#064e3b", outline="")
+        sensor_x = start_x - 45
+        sensor_y = track_y - 20
+        c.create_rectangle(sensor_x - 16, sensor_y - 18, sensor_x + 16, sensor_y + 18, fill="#0284c7", outline="#38bdf8", width=2)
+        c.create_oval(sensor_x - 10, sensor_y - 8, sensor_x, sensor_y - 2, fill="#cbd5e1")
+        c.create_oval(sensor_x - 10, sensor_y + 2, sensor_x, sensor_y + 8, fill="#cbd5e1")
+        c.create_text(sensor_x, sensor_y - 26, text="HC-SR04", fill="#38bdf8", font=("Segoe UI", 7, "bold"))
 
-        # Highway Asphalt
-        road_top_w = int(w * 0.78)
-        road_left_top = (w - road_top_w) // 2
-        road_right_top = road_left_top + road_top_w
-        c.create_polygon(road_left_top, horizon_y, road_right_top, horizon_y, w - 20, road_bottom_y, 20, road_bottom_y, fill="#1e2430", outline="#334155", width=2)
-
-        # Center Divider Dashes
-        self.road_scroll = (self.road_scroll + (0.9 if self.system_enabled else 0.0)) % 40.0
-        center_y = int(horizon_y + (road_bottom_y - horizon_y) * 0.65)
-        for x_step in range(-40, w + 60, 50):
-            dash_x = x_step + self.road_scroll
-            c.create_line(dash_x, center_y, dash_x + 22, center_y, fill="#fbbf24", width=3)
-
-        track_start_x = 140
-        track_end_x = w - 120
-        track_len = track_end_x - track_start_x
-
-        # Follower Autonomous AGV
-        car_x = track_start_x - 55
-        car_y = center_y - 8
-
-        if self.system_enabled:
-            c.create_polygon(car_x + 38, car_y - 4, car_x + 190, car_y - 25, car_x + 190, car_y + 25, car_x + 38, car_y + 6, fill="#0c2340", outline="")
-
-        c.create_rectangle(car_x - 42, car_y - 16, car_x + 36, car_y + 14, fill="#1e3a8a", outline="#60a5fa", width=2)
-        c.create_polygon(car_x - 22, car_y - 16, car_x - 8, car_y - 28, car_x + 18, car_y - 28, car_x + 28, car_y - 16, fill="#0f172a", outline="#93c5fd", width=1)
-        c.create_rectangle(car_x + 34, car_y - 12, car_x + 38, car_y - 4, fill="#00f2fe", outline="#ffffff")
-        c.create_rectangle(car_x + 34, car_y + 4, car_x + 38, car_y + 12, fill="#00f2fe", outline="#ffffff")
-
-        # Wheels
-        for wx in [car_x - 26, car_x + 20]:
-            wy = car_y + 14
-            c.create_oval(wx - 9, wy - 9, wx + 9, wy + 9, fill="#0f172a", outline="#94a3b8", width=2)
-            c.create_oval(wx - 4, wy - 4, wx + 4, wy + 4, fill="#00f2fe", outline="")
-
-        c.create_text(car_x - 4, car_y - 34, text="AUTONOMOUS AGV", fill="#60a5fa", font=("Segoe UI", 8, "bold"))
-
-        # Lead Vehicle
-        pos_clamped = max(0.0, min(50.0, self.position))
-        target_x = track_start_x + (pos_clamped / 50.0) * track_len
-        target_y = center_y - 8
-
-        c.create_rectangle(target_x - 20, target_y - 14, target_x + 40, target_y + 14, fill="#881337", outline="#fb7185", width=2)
-        c.create_polygon(target_x - 6, target_y - 14, target_x + 6, target_y - 25, target_x + 26, target_y - 25, target_x + 34, target_y - 14, fill="#0f172a", outline="#f43f5e", width=1)
-        brake_glow = "#f43f5e" if self.velocity < 0 else "#be123c"
-        c.create_rectangle(target_x - 23, target_y - 12, target_x - 20, target_y + 12, fill=brake_glow, outline="#fda4af")
-        c.create_text(target_x + 12, target_y - 32, text=f"LEAD VEHICLE ({self.position:.1f} m)", fill="#fb7185", font=("Segoe UI", 8, "bold"))
-
-        # Sonar Wave Arcs
-        if self.system_enabled:
-            self.wave_phase = (self.wave_phase + 0.16) % 1.0
-            gap_span = (target_x - (car_x + 44))
-            if gap_span > 20:
-                for arc_i in range(3):
-                    prog = (self.wave_phase + arc_i * 0.33) % 1.0
-                    ax = (car_x + 44) + (gap_span * prog)
-                    ay = car_y
-                    r_span = 14 + 18 * prog
-                    c.create_arc(ax - r_span, ay - r_span, ax + r_span, ay + r_span, start=-45, extent=90, style=tk.ARC, outline="#00f2fe", width=2)
-
-    def draw_bench_apparatus(self, c, w, h):
-        """Photorealistic Laboratory Test Track with Aluminum Rails and HC-SR04 Transducer"""
-        track_y = h - 45
-        track_start_x = 100
-        track_end_x = w - 60
-        track_len = track_end_x - track_start_x
-
-        c.create_rectangle(15, 15, w - 15, h - 15, fill="#0b0e14", outline="#1e293b", width=1)
-        c.create_rectangle(track_start_x - 20, track_y - 8, track_end_x + 20, track_y + 8, fill="#334155", outline="#64748b", width=2)
-        c.create_line(track_start_x - 20, track_y, track_end_x + 20, track_y, fill="#94a3b8", width=1)
-
-        for tick_cm in range(0, 55, 5):
-            tick_x = track_start_x + (tick_cm / 50.0) * track_len
-            is_major = (tick_cm % 10 == 0)
-            t_len = 10 if is_major else 5
-            t_col = "#38bdf8" if is_major else "#475569"
-            c.create_line(tick_x, track_y + 8, tick_x, track_y + 8 + t_len, fill=t_col, width=1)
-            if is_major:
-                c.create_text(tick_x, track_y + 26, text=f"{tick_cm} cm", fill="#94a3b8", font=("Segoe UI", 7, "bold"))
-
-        sensor_x = track_start_x - 55
-        sensor_y = track_y - 32
-        c.create_rectangle(sensor_x - 20, sensor_y - 28, sensor_x + 20, sensor_y + 28, fill="#1d4ed8", outline="#60a5fa", width=2)
-        c.create_oval(sensor_x - 14, sensor_y - 22, sensor_x + 14, sensor_y - 4, fill="#e2e8f0", outline="#94a3b8", width=2)
-        c.create_oval(sensor_x - 14, sensor_y + 2, sensor_x + 14, sensor_y + 20, fill="#e2e8f0", outline="#94a3b8", width=2)
-        c.create_text(sensor_x, sensor_y - 36, text="HC-SR04 SENSOR", fill="#38bdf8", font=("Segoe UI", 8, "bold"))
-
-        target_clamped = max(0.0, min(50.0, self.target))
-        target_x = track_start_x + (target_clamped / 50.0) * track_len
-        c.create_line(target_x, track_y - 65, target_x, track_y, fill="#00f2fe", width=2, dash=(3, 3))
-        c.create_polygon(target_x, track_y - 65, target_x + 16, track_y - 55, target_x, track_y - 45, fill="#00f2fe", outline="#ffffff")
-        c.create_text(target_x, track_y - 74, text=f"SETPOINT: {self.target:.1f} cm", fill="#00f2fe", font=("Segoe UI", 8, "bold"))
+        tgt_clamped = max(0.0, min(50.0, self.target))
+        tgt_x = start_x + (tgt_clamped / 50.0) * track_w
+        c.create_line(tgt_x, track_y - 40, tgt_x, track_y, fill="#38bdf8", width=2, dash=(3, 2))
+        c.create_polygon(tgt_x, track_y - 40, tgt_x + 10, track_y - 34, tgt_x, track_y - 28, fill="#38bdf8")
 
         pos_clamped = max(0.0, min(50.0, self.position))
-        cart_x = track_start_x + (pos_clamped / 50.0) * track_len
-        cart_y = track_y - 16
+        obj_x = start_x + (pos_clamped / 50.0) * track_w
+        obj_y = track_y - 15
+        c.create_rectangle(obj_x - 5, obj_y - 24, obj_x + 5, obj_y + 15, fill="#e2e8f0", outline="#38bdf8", width=2)
+        c.create_text(obj_x, obj_y - 30, text=f"{self.position:.1f} cm", fill="#10b981", font=("Consolas", 7, "bold"))
 
-        c.create_rectangle(cart_x - 18, cart_y - 14, cart_x + 18, cart_y + 2, fill="#0284c7", outline="#38bdf8", width=2)
-        c.create_oval(cart_x - 10, cart_y - 24, cart_x + 10, cart_y - 4, fill="#94a3b8", outline="#f1f5f9", width=2)
-        c.create_text(cart_x, cart_y - 36, text=f"{self.position:.1f} cm", fill="#ffffff", font=("Segoe UI", 8, "bold"))
+        # Vectors for Linear Tracker
+        if self.show_vectors:
+            v_len = max(-45.0, min(45.0, self.velocity * 2.5))
+            if abs(v_len) > 2.0:
+                c.create_line(obj_x, obj_y, obj_x + v_len, obj_y, fill="#34d399", width=2.5, arrow=tk.LAST)
+                c.create_text(obj_x + v_len, obj_y - 10, text="v", fill="#34d399", font=("Segoe UI", 7, "bold"))
 
-        if self.system_enabled:
-            self.wave_phase = (self.wave_phase + 0.16) % 1.0
-            span_dist = (cart_x - (sensor_x + 20))
-            if span_dist > 25:
-                for arc_i in range(3):
-                    prog = (self.wave_phase + arc_i * 0.33) % 1.0
-                    ax = (sensor_x + 20) + (span_dist * prog)
-                    ay = sensor_y
-                    r_span = 14 + 14 * prog
-                    c.create_arc(ax - r_span, ay - r_span, ax + r_span, ay + r_span, start=-50, extent=100, style=tk.ARC, outline="#38bdf8", width=2)
+        # Sonar pulses
+        self.wave_phase = (self.wave_phase + 0.18) % 1.0
+        gap = (obj_x - 5) - (sensor_x + 16)
+        if gap > 15:
+            for w_idx in range(3):
+                prog = (self.wave_phase + w_idx * 0.33) % 1.0
+                wx = (sensor_x + 16) + (gap * prog)
+                r = 8 + 10 * prog
+                c.create_arc(wx - r, sensor_y - r, wx + r, sensor_y + r, start=-40, extent=80, style=tk.ARC, outline="#38bdf8", width=1.5)
 
-        # Servo
-        servo_x = w - 110
-        servo_y = 55
-        c.create_rectangle(servo_x - 28, servo_y - 20, servo_x + 28, servo_y + 20, fill="#0369a1", outline="#38bdf8", width=2)
-        ang_rad = math.radians(self.servo_angle - 180)
-        horn_len = 30
-        horn_end_x = servo_x + horn_len * math.cos(ang_rad)
-        horn_end_y = servo_y + horn_len * math.sin(ang_rad)
-        c.create_line(servo_x, servo_y, horn_end_x, horn_end_y, fill="#fbbf24", width=4)
-        c.create_text(servo_x, servo_y + 30, text=f"SERVO: {self.servo_angle:.1f}°", fill="#fbbf24", font=("Segoe UI", 8, "bold"))
+        # Virtual 16x2 LCD
+        lcd_x = w - 80
+        lcd_y = track_y - 20
+        c.create_rectangle(lcd_x - 40, lcd_y - 16, lcd_x + 40, lcd_y + 18, fill="#1e3a8a", outline="#60a5fa", width=1.5)
+        err = self.target - self.smoothed_dist
+        e_sign = "+" if err > 0 else ""
+        c.create_text(lcd_x - 34, lcd_y - 7, text=f"T:{self.target:.0f} D:{self.smoothed_dist:.1f}", fill="#ffffff", font=("Courier", 7, "bold"), anchor="w")
+        c.create_text(lcd_x - 34, lcd_y + 7, text=f"E:{e_sign}{err:.1f} S:{int(self.servo_angle)}", fill="#ffffff", font=("Courier", 7, "bold"), anchor="w")
 
-    def draw_oscilloscope(self):
-        c = self.scope_canvas
+    def update_buffers(self):
+        self.target_buf.pop(0)
+        self.target_buf.append(self.target)
+
+        self.pos_buf.pop(0)
+        self.pos_buf.append(self.position)
+
+        err = self.target - self.position
+        self.err_buf.pop(0)
+        self.err_buf.append(err)
+
+        self.servo_buf.pop(0)
+        self.servo_buf.append(self.servo_angle)
+
+        self.hw_buf.pop(0)
+        self.hw_buf.append(self.hw_replay_pos)
+
+    def draw_graph(self):
+        c = self.graph_canvas
         c.delete("all")
         w = c.winfo_width()
         h = c.winfo_height()
         if w < 50 or h < 50:
             return
 
-        y_max = 50.0
+        # Stacked Panels (A3):
+        # Panel 1: Position r(t), y(t) [0 to 50 cm] - Height: 48%
+        h1 = int(h * 0.48)
+        # Panel 2: Error e(t) [-15 to +15 cm] - Height: 24%
+        h2 = int(h * 0.24)
+        y2 = h1
+        # Panel 3: Servo Angle u(t) [0 to 180 deg] - Height: remainder
+        y3 = h1 + h2
+        h3 = h - y3
 
-        for cm_val in [10, 20, 30, 40]:
-            y_px = h - int((cm_val / y_max) * h)
-            c.create_line(0, y_px, w, y_px, fill="#131b2e", dash=(2, 4))
-            c.create_text(26, y_px - 8, text=f"{cm_val} cm", fill="#475569", font=("Segoe UI", 7, "bold"))
+        # Grid and Labels for Panel 1 (Position)
+        c.create_text(6, 3, text="Position r(t), y(t) [cm]", fill="#64748b", font=("Consolas", 7), anchor="nw")
+        for cm in [15, 30, 45]:
+            y_px = h1 - int((cm / 50.0) * h1)
+            c.create_line(0, y_px, w, y_px, fill="#131c2e", dash=(2, 4))
+            c.create_text(w - 6, y_px - 2, text=f"{cm}cm", fill="#475569", font=("Consolas", 6), anchor="e")
 
-        dx = w / (self.buffer_len - 1)
+        # Divider between Panel 1 & 2
+        c.create_line(0, y2, w, y2, fill="#1e293b", width=1)
 
-        # Fill Area between Setpoint and Position
-        error_poly = []
-        for i in range(self.buffer_len):
+        # Panel 2: Error [-15 to +15 cm]
+        c.create_text(6, y2 + 2, text="Error e(t) [±15cm]", fill="#64748b", font=("Consolas", 7), anchor="nw")
+        e_zero_y = y2 + int(h2 / 2)
+        c.create_line(0, e_zero_y, w, e_zero_y, fill="#334155", dash=(2, 2))
+        c.create_text(w - 6, e_zero_y - 2, text="0cm", fill="#475569", font=("Consolas", 6), anchor="e")
+
+        # Divider between Panel 2 & 3
+        c.create_line(0, y3, w, y3, fill="#1e293b", width=1)
+
+        # Panel 3: Servo Angle [0 to 180 deg] with Saturation Shading (A3)
+        c.create_text(6, y3 + 2, text="Servo Effort u(θ) [deg]", fill="#64748b", font=("Consolas", 7), anchor="nw")
+        sat_high_y = y3 + h3 - int((155.0 / 180.0) * h3)
+        sat_low_y = y3 + h3 - int((25.0 / 180.0) * h3)
+
+        # Upper Saturation (>155°)
+        c.create_rectangle(0, y3, w, sat_high_y, fill="#2b0d14", outline="")
+        c.create_line(0, sat_high_y, w, sat_high_y, fill="#f43f5e", dash=(2, 3), width=1)
+        c.create_text(w - 6, y3 + 4, text="SAT >155°", fill="#f43f5e", font=("Consolas", 6, "bold"), anchor="ne")
+
+        # Lower Saturation (<25°)
+        c.create_rectangle(0, sat_low_y, w, y3 + h3, fill="#2b0d14", outline="")
+        c.create_line(0, sat_low_y, w, sat_low_y, fill="#f43f5e", dash=(2, 3), width=1)
+        c.create_text(w - 6, y3 + h3 - 6, text="SAT <25°", fill="#f43f5e", font=("Consolas", 6, "bold"), anchor="se")
+
+        # Neutral 90° reference
+        neutral_y = y3 + h3 - int((90.0 / 180.0) * h3)
+        c.create_line(0, neutral_y, w, neutral_y, fill="#334155", dash=(2, 4))
+        c.create_text(w - 6, neutral_y - 2, text="90°", fill="#475569", font=("Consolas", 6), anchor="e")
+
+        dx = w / (self.buf_len - 1)
+
+        # Draw Traces
+        # 1. Target r(t) (Cyan)
+        tgt_pts = []
+        for i, val in enumerate(self.target_buf):
             x = i * dx
-            y_pos = h - (self.pos_buffer[i] / y_max) * h
-            error_poly.append((x, max(0, min(h, y_pos))))
-        for i in range(self.buffer_len - 1, -1, -1):
-            x = i * dx
-            y_tgt = h - (self.target_buffer[i] / y_max) * h
-            error_poly.append((x, max(0, min(h, y_tgt))))
+            y = h1 - (max(0.0, min(50.0, val)) / 50.0) * h1
+            tgt_pts.extend([x, y])
+        if len(tgt_pts) >= 4:
+            c.create_line(*tgt_pts, fill="#38bdf8", width=2)
 
-        if len(error_poly) >= 6:
-            flat_poly = [coord for pt in error_poly for coord in pt]
-            fill_col = "#1f1422" if self.controller_type == "ON_OFF" else "#0c1d2e"
-            c.create_polygon(flat_poly, fill=fill_col, outline="")
-
-        # Target Curve (Cyan)
-        target_pts = []
-        for i, val in enumerate(self.target_buffer):
-            x = i * dx
-            y = h - (val / y_max) * h
-            target_pts.extend([x, max(0, min(h, y))])
-        if len(target_pts) >= 4:
-            c.create_line(*target_pts, fill="#00f2fe", width=2)
-
-        # Control Effort Curve (Amber)
-        ctrl_pts = []
-        for i, val in enumerate(self.ctrl_buffer):
-            x = i * dx
-            norm_val = 25.0 + (val * 0.38)
-            y = h - (norm_val / y_max) * h
-            ctrl_pts.extend([x, max(0, min(h, y))])
-        if len(ctrl_pts) >= 4:
-            c.create_line(*ctrl_pts, fill="#fbbf24", width=1, dash=(3, 2))
-
-        # Position Curve (Blue or Ruby)
-        pos_color = "#38bdf8" if self.controller_type == "PID" else "#f43f5e"
-        glow_color = "#075985" if self.controller_type == "PID" else "#881337"
+        # 2. Position y(t) (Emerald / Rose)
+        pos_col = "#10b981" if self.controller_type == "PID" else "#f43f5e"
         pos_pts = []
-        for i, val in enumerate(self.pos_buffer):
+        for i, val in enumerate(self.pos_buf):
             x = i * dx
-            y = h - (val / y_max) * h
-            pos_pts.extend([x, max(0, min(h, y))])
+            y = h1 - (max(0.0, min(50.0, val)) / 50.0) * h1
+            pos_pts.extend([x, y])
         if len(pos_pts) >= 4:
-            c.create_line(*pos_pts, fill=glow_color, width=4)
-            c.create_line(*pos_pts, fill=pos_color, width=2)
+            c.create_line(*pos_pts, fill=pos_col, width=2)
 
-    def animate_loop(self):
-        curr_time = time.time()
-        dt = curr_time - self.last_sim_time
-        self.last_sim_time = curr_time
+        # Hardware trace overlay in Replay Mode (C2)
+        if self.mode == "replay":
+            hw_pts = []
+            for i, val in enumerate(self.hw_buf):
+                if val is not None:
+                    x = i * dx
+                    y = h1 - (max(0.0, min(50.0, val)) / 50.0) * h1
+                    hw_pts.extend([x, y])
+            if len(hw_pts) >= 4:
+                c.create_line(*hw_pts, fill="#f59e0b", width=2, dash=(3, 2))
+            c.create_text(w - 70, 4, text=f"HW vs Sim RMSE: {self.replay_rmse:.2f} cm", fill="#f59e0b", font=("Consolas", 7, "bold"), anchor="ne")
+
+        # 3. Error e(t) (Rose)
+        err_pts = []
+        for i, val in enumerate(self.err_buf):
+            x = i * dx
+            y = e_zero_y - (max(-15.0, min(15.0, val)) / 15.0) * (h2 / 2)
+            err_pts.extend([x, y])
+        if len(err_pts) >= 4:
+            c.create_line(*err_pts, fill="#f43f5e", width=1.5)
+
+        # 4. Servo Angle u(t) (Amber)
+        srv_pts = []
+        for i, val in enumerate(self.servo_buf):
+            x = i * dx
+            y = y3 + h3 - (max(0.0, min(180.0, val)) / 180.0) * h3
+            srv_pts.extend([x, y])
+        if len(srv_pts) >= 4:
+            c.create_line(*srv_pts, fill="#fbbf24", width=1.5)
+
+        # Time Axis in seconds (A3)
+        t_span = (self.buf_len - 1) * 0.03
+        for pct, lbl in [(0.0, f"-{t_span:.1f}s"), (0.5, f"-{0.5*t_span:.1f}s"), (1.0, "0.0s (Now)")]:
+            tx = pct * w
+            anchor = "w" if pct == 0 else ("e" if pct == 1.0 else "center")
+            c.create_text(tx, h - 3, text=lbl, fill="#64748b", font=("Consolas", 6), anchor=anchor)
+
+        # Hover Crosshair & Tooltip HUD (A3)
+        if self.hover_x is not None and 0 <= self.hover_x <= w:
+            c.create_line(self.hover_x, 0, self.hover_x, h, fill="#38bdf8", dash=(2, 2))
+            idx = int(self.hover_x / dx)
+            idx = max(0, min(self.buf_len - 1, idx))
+            t_rel = -(self.buf_len - 1 - idx) * 0.03
+            val_r = self.target_buf[idx]
+            val_y = self.pos_buf[idx]
+            val_e = self.err_buf[idx]
+            val_u = self.servo_buf[idx]
+
+            hud_txt = f"t:{t_rel:+.2f}s | r:{val_r:.1f}cm | y:{val_y:.1f}cm | e:{val_e:+.1f}cm | u:{int(val_u)}°"
+            hud_w = 265
+            hud_x = min(w - hud_w - 6, max(6, self.hover_x + 8))
+            hud_y = max(8, min(h - 22, (self.hover_y or 30) - 10))
+            c.create_rectangle(hud_x, hud_y, hud_x + hud_w, hud_y + 16, fill="#0f172a", outline="#38bdf8", width=1)
+            c.create_text(hud_x + 6, hud_y + 8, text=hud_txt, fill="#f8fafc", font=("Consolas", 7), anchor="w")
+
+    def run_loop(self):
+        now = time.time()
+        dt = now - self.last_time
+        self.last_time = now
 
         if dt > 0.1:
             dt = 0.03
 
-        if self.mode == "sim":
+        if not self.is_paused:
             self.physics_step(dt)
+            self.update_buffers()
 
-        self.target_buffer.pop(0)
-        self.target_buffer.append(self.target)
-
-        self.pos_buffer.pop(0)
-        self.pos_buffer.append(self.position)
-
-        self.ctrl_buffer.pop(0)
-        self.ctrl_buffer.append(self.control_output)
-
-        # Update telemetry badges
-        self.card_target.config(text=f"{self.target:.1f} cm")
-        self.card_pos.config(text=f"{self.position:.1f} cm")
+        # Telemetry Labels (A8)
+        self.lbl_target.config(text=f"{self.target:.1f} cm")
+        self.lbl_measured.config(text=f"{self.position:.1f} cm")
         err = self.target - self.position
         sign = "+" if err > 0 else ""
-        self.card_error.config(text=f"{sign}{err:.1f} cm")
+        self.lbl_error.config(text=f"{sign}{err:.1f} cm")
+        self.lbl_servo.config(text=f"{int(self.servo_angle)}°")
+        self.lbl_vel.config(text=f"{self.velocity:+.1f} cm/s")
+        self.lbl_iae.config(text=f"{self.step_iae:.1f} cm·s")
+        self.lbl_itae.config(text=f"{self.step_itae:.1f} cm·s²")
 
-        if self.controller_type == "ON_OFF":
-            self.card_settling.config(text="LIMIT CYCLE", fg="#f43f5e")
-            self.card_overshoot.config(text="SUSTAINED", fg="#f43f5e")
-        else:
-            ts_text = f"{self.settling_time:.2f} s" if self.settling_time > 0 else "SETTLING..."
-            self.card_settling.config(text=ts_text, fg="#fbbf24")
-            self.card_overshoot.config(text=f"{self.peak_overshoot:.1f} %", fg="#a78bfa")
+        self.draw_mechanical_rig()
+        self.draw_graph()
 
-        tr_str = f"{self.rise_time:.2f}s" if self.rise_time > 0 else "--"
-        ts_str = f"{self.settling_time:.2f}s" if self.settling_time > 0 else "--"
-        mp_str = f"{self.peak_overshoot:.1f}%"
-        ess_str = f"{self.steady_state_error:.2f}cm"
-        algo_label = "PID" if self.controller_type == "PID" else "Bang-Bang"
-        self.scope_metrics_lbl.config(text=f"[{algo_label}]  tr: {tr_str}  |  ts: {ts_str}  |  Mp: {mp_str}  |  e_ss: {ess_str}")
+        self._after_id = self.after(28, self.run_loop)
 
-        self.draw_meters()
-        self.draw_animation()
-        self.draw_oscilloscope()
-
-        self.after(28, self.animate_loop)
+    def destroy(self):
+        if hasattr(self, '_after_id') and self._after_id:
+            try:
+                self.after_cancel(self._after_id)
+            except Exception:
+                pass
+        try:
+            self.quit()
+        except Exception:
+            pass
+        super().destroy()
 
 
 if __name__ == "__main__":
-    app = PIDPhysicsSimulator()
+    app = VisualPIDSimulatorApp()
     app.mainloop()

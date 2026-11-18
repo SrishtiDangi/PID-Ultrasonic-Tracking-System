@@ -1,0 +1,80 @@
+{
+  "relay_autotune": {
+    "Ku": 5.457,
+    "Tu": 1.85,
+    "limit_cycle_amplitude_cm": 3.5,
+    "classic_zn": {
+      "Kp": 3.27,
+      "Ki": 3.54,
+      "Kd": 0.76,
+      "notes": "Classic ZN is overly aggressive on double integrator (excessive overshoot)"
+    },
+    "detuned_zn": {
+      "Kp": 1.91,
+      "Ki": 0.06,
+      "Kd": 2.22,
+      "notes": "Detuned ZN with 50% Kp back-off and enhanced derivative damping"
+    }
+  },
+  "itae_optimization": {
+    "Kp": 4.47,
+    "Ki": 0.005,
+    "Kd": 1.62,
+    "itae_cost": 3.27,
+    "converged": true
+  },
+  "transient_comparison": {
+    "nominal": {
+      "rise_time": 0.6300000000000001,
+      "settling_time": 2.28,
+      "overshoot_pct": 3.229925379153968,
+      "steady_state_error": 0.07258476037665318,
+      "itae": 6.290049837446134,
+      "rmse": 3.7050517785137114
+    },
+    "detuned_zn": {
+      "rise_time": 2.1900000000000004,
+      "settling_time": 4.5,
+      "overshoot_pct": 0.7955100420546303,
+      "steady_state_error": 0.04297256021969176,
+      "itae": 13.496828060047331,
+      "rmse": 3.8064877387531824
+    },
+    "itae_optimized": {
+      "rise_time": 0.44999999999999996,
+      "settling_time": 2.25,
+      "overshoot_pct": 4.778656586855234,
+      "steady_state_error": 0.004386780353815567,
+      "itae": 4.443981217777389,
+      "rmse": 3.61019725377838
+    }
+  },
+  "sensor_filtering": {
+    "raw": {
+      "rmse_cm": 0.712,
+      "roughness": 3.171
+    },
+    "ema": {
+      "rmse_cm": 0.612,
+      "lag_ms": -60.0,
+      "noise_reduction_pct": 14.0
+    },
+    "kalman": {
+      "rmse_cm": 0.619,
+      "lag_ms": -60.0,
+      "noise_reduction_pct": 13.0,
+      "description": "Reduced lag and dynamic spike rejection (least-squares optimal)"
+    }
+  },
+  "feedforward_tracking": {
+    "feedback_only": {
+      "lag_ms": -542.2,
+      "rmse_cm": 3.67
+    },
+    "with_feedforward": {
+      "lag_ms": -120.5,
+      "rmse_cm": 2.14,
+      "lag_reduction_pct": 77.8
+    }
+  }
+}
