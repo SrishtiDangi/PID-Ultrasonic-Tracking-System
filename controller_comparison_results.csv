@@ -1,0 +1,5 @@
+Controller,Kp,Ki,Kd,RiseTime_s,SettlingTime_s,Overshoot_pct,SteadyStateErr_cm,ITAE,RMSE_cm,Status
+P-Only,2.4,0.0,0.0,0.73,4.09,23.2,0.0,13.55,4.166,STABLE
+PD,2.4,0.0,0.9,1.13,1.75,0.7,0.0,5.11,3.878,STABLE
+PI,2.4,0.04,0.0,0.73,4.01,24.3,0.099,14.61,4.181,STABLE
+PID,2.4,0.04,0.9,1.11,1.67,1.8,0.158,8.03,3.873,STABLE
