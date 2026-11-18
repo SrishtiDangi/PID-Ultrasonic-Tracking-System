@@ -306,3 +306,4 @@ class HardwareDiagnosticsApp(tk.Tk):
 if __name__ == "__main__":
     app = HardwareDiagnosticsApp()
     app.mainloop()
+
