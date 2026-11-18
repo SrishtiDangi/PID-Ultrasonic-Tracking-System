@@ -84,6 +84,14 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.pos_buf = [12.0] * self.buf_len
         self.err_buf = [10.0] * self.buf_len
         self.servo_buf = [90.0] * self.buf_len
+        self.hw_buf = [None] * self.buf_len
+
+        # Hardware CSV Replay State (C2)
+        self.replay_data = None
+        self.replay_idx = 0
+        self.hw_replay_pos = None
+        self.replay_rmse = 0.0
+        self.replay_sq_errs = []
 
         # Visual Loop Variables
         self.last_time = time.time()
@@ -119,6 +127,9 @@ class VisualPIDSimulatorApp(tk.Tk):
 
         self.btn_traj = tk.Button(controls_box, text="Trajectory: 🌊 Sine", command=self.toggle_trajectory, bg="#059669", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=2, cursor="hand2")
         self.btn_traj.pack(side=tk.LEFT, padx=3)
+
+        self.btn_replay = tk.Button(controls_box, text="📼 Replay CSV", command=self.load_replay_csv, bg="#6366f1", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=2, cursor="hand2")
+        self.btn_replay.pack(side=tk.LEFT, padx=3)
 
         self.port_combo = ttk.Combobox(controls_box, width=6, state="readonly")
         self.port_combo.pack(side=tk.LEFT, padx=2)
@@ -281,6 +292,60 @@ class VisualPIDSimulatorApp(tk.Tk):
             self.btn_traj.config(text="Trajectory: Step", bg="#059669")
             self.status_msg.config(text="Tracking: Stationary Setpoint", fg="#10b981")
 
+    def load_replay_csv(self, filepath=None):
+        if self.mode == "replay":
+            self.mode = "sim"
+            self.btn_replay.config(text="📼 Replay CSV", bg="#6366f1")
+            self.status_msg.config(text="Mode: Closed-Loop PID Simulation", fg="#10b981")
+            self.hw_replay_pos = None
+            return
+
+        if not filepath:
+            from tkinter import filedialog
+            filepath = filedialog.askopenfilename(
+                title="Select Hardware CSV Log for Replay",
+                initialdir="logs",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+            if not filepath:
+                import os
+                if os.path.exists("logs/sample_hardware_step_test.csv"):
+                    filepath = "logs/sample_hardware_step_test.csv"
+                else:
+                    return
+
+        try:
+            import os
+            import numpy as np
+            data = np.genfromtxt(filepath, delimiter=',', names=True)
+            self.replay_data = {
+                't': data['timestamp'],
+                'r': data['setpoint'],
+                'y_hw': data['distance'],
+                'servo': data['servo_angle'],
+                'kp': float(data['Kp'][0]) if 'Kp' in data.dtype.names else 2.40,
+                'ki': float(data['Ki'][0]) if 'Ki' in data.dtype.names else 0.04,
+                'kd': float(data['Kd'][0]) if 'Kd' in data.dtype.names else 0.90
+            }
+            self.s_kp.var.set(self.replay_data['kp'])
+            self.s_ki.var.set(self.replay_data['ki'])
+            self.s_kd.var.set(self.replay_data['kd'])
+            self.on_param_update()
+
+            self.mode = "replay"
+            self.trajectory_mode = "step"
+            self.replay_idx = 0
+            self.position = float(self.replay_data['y_hw'][0])
+            self.velocity = 0.0
+            self.target = float(self.replay_data['r'][0])
+            self.replay_sq_errs = []
+            self.replay_rmse = 0.0
+            self.btn_replay.config(text="⏹ Stop Replay", bg="#e11d48")
+            fname = os.path.basename(filepath)
+            self.status_msg.config(text=f"Replaying: {fname} (Hardware vs Sim)", fg="#f59e0b")
+        except Exception as e:
+            messagebox.showerror("Replay Error", f"Failed to load CSV: {e}")
+
     def set_target(self, val):
         self.trajectory_mode = "step"
         self.btn_traj.config(text="Trajectory: Step", bg="#059669")
@@ -426,9 +491,23 @@ class VisualPIDSimulatorApp(tk.Tk):
 
         dt = dt * self.speed_multiplier
 
-        # Trajectory Generator
-        self.traj_time += dt
-        if self.trajectory_mode == "sine":
+        # Replay Mode Handler (C2)
+        if self.mode == "replay" and self.replay_data:
+            idx = self.replay_idx
+            N = len(self.replay_data['t'])
+            if idx < N:
+                self.target = float(self.replay_data['r'][idx])
+                self.hw_replay_pos = float(self.replay_data['y_hw'][idx])
+                sq_e = (self.position - self.hw_replay_pos) ** 2
+                self.replay_sq_errs.append(sq_e)
+                self.replay_rmse = math.sqrt(sum(self.replay_sq_errs) / len(self.replay_sq_errs))
+                self.replay_idx += 1
+            else:
+                self.replay_idx = 0
+                self.replay_sq_errs = []
+        elif self.trajectory_mode == "sine":
+            # Trajectory Generator
+            self.traj_time += dt
             self.target = 22.0 + self.sine_amp * math.sin(2.0 * math.pi * self.sine_freq * self.traj_time)
             self.s_target.var.set(round(self.target, 1))
 
@@ -562,6 +641,14 @@ class VisualPIDSimulatorApp(tk.Tk):
         # Ball Label: Placed BELOW the beam to completely prevent text collision!
         c.create_text(ball_x, ball_y + 20, text=f"{self.position:.1f} cm", fill="#fbbf24", font=("Consolas", 8, "bold"))
 
+        # Ghost ball for hardware replay (C2)
+        if self.mode == "replay" and self.hw_replay_pos is not None:
+            hw_frac = max(0.0, min(1.0, (self.hw_replay_pos - 3.5) / 44.0))
+            hw_bx = x1 + hw_frac * (x2 - x1)
+            hw_by = y1 + hw_frac * (y2 - y1) - 10
+            c.create_oval(hw_bx - 9, hw_by - 9, hw_bx + 9, hw_by + 9, outline="#f59e0b", width=2, dash=(2, 2))
+            c.create_text(hw_bx, hw_by - 16, text=f"HW {self.hw_replay_pos:.1f}", fill="#f59e0b", font=("Consolas", 6, "bold"))
+
         # Target Setpoint Flag: Placed strictly ABOVE the beam!
         tgt_frac = (self.target - 3.5) / 44.0
         tx = x1 + tgt_frac * (x2 - x1)
@@ -688,6 +775,9 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.servo_buf.pop(0)
         self.servo_buf.append(self.servo_angle)
 
+        self.hw_buf.pop(0)
+        self.hw_buf.append(self.hw_replay_pos)
+
     def draw_graph(self):
         c = self.graph_canvas
         c.delete("all")
@@ -767,6 +857,18 @@ class VisualPIDSimulatorApp(tk.Tk):
         if len(pos_pts) >= 4:
             c.create_line(*pos_pts, fill=pos_col, width=2)
 
+        # Hardware trace overlay in Replay Mode (C2)
+        if self.mode == "replay":
+            hw_pts = []
+            for i, val in enumerate(self.hw_buf):
+                if val is not None:
+                    x = i * dx
+                    y = h1 - (max(0.0, min(50.0, val)) / 50.0) * h1
+                    hw_pts.extend([x, y])
+            if len(hw_pts) >= 4:
+                c.create_line(*hw_pts, fill="#f59e0b", width=2, dash=(3, 2))
+            c.create_text(w - 70, 4, text=f"HW vs Sim RMSE: {self.replay_rmse:.2f} cm", fill="#f59e0b", font=("Consolas", 7, "bold"), anchor="ne")
+
         # 3. Error e(t) (Rose)
         err_pts = []
         for i, val in enumerate(self.err_buf):
@@ -836,7 +938,19 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.draw_mechanical_rig()
         self.draw_graph()
 
-        self.after(28, self.run_loop)
+        self._after_id = self.after(28, self.run_loop)
+
+    def destroy(self):
+        if hasattr(self, '_after_id') and self._after_id:
+            try:
+                self.after_cancel(self._after_id)
+            except Exception:
+                pass
+        try:
+            self.quit()
+        except Exception:
+            pass
+        super().destroy()
 
 
 if __name__ == "__main__":

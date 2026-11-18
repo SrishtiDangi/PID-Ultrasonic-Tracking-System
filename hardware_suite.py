@@ -47,6 +47,13 @@ class HardwareDiagnosticsApp(tk.Tk):
         self.dist_hist = [20.0] * self.max_pts
         self.servo_hist = [90.0] * self.max_pts
 
+        # CSV Telemetry Logger (C1)
+        self.is_logging = False
+        self.log_file = None
+        self.log_count = 0
+        self.log_start_time = 0.0
+        self.log_filename = ""
+
         self.build_ui()
         self.refresh_ports()
         self.after(50, self.update_gui)
@@ -121,6 +128,16 @@ class HardwareDiagnosticsApp(tk.Tk):
         self.inp_i = self.make_param_row(diag_box, "Ki Gain (I):", "0.02", "I")
         self.inp_d = self.make_param_row(diag_box, "Kd Gain (D):", "0.10", "D")
         self.inp_t = self.make_param_row(diag_box, "Target (cm):", "20.0", "T")
+
+        # CSV Telemetry Logger (C1)
+        log_box = tk.LabelFrame(diag_box, text=" CSV Telemetry Logger (C1) ", fg="#fbbf24", bg="#1e293b", font=("Segoe UI", 8, "bold"), padx=6, pady=4)
+        log_box.pack(fill=tk.X, pady=(10, 2))
+
+        self.btn_log = tk.Button(log_box, text="🔴 Start Recording CSV", command=self.toggle_logging, bg="#b91c1c", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=6, pady=2, cursor="hand2")
+        self.btn_log.pack(fill=tk.X, pady=2)
+
+        self.lbl_log_status = tk.Label(log_box, text="Logger: Idle (Not recording)", fg="#94a3b8", bg="#1e293b", font=("Consolas", 8))
+        self.lbl_log_status.pack(anchor="w", pady=1)
 
         # 3B. Right: Live Oscilloscope Waveform from Physical Hardware
         graph_box = tk.LabelFrame(mid_frame, text=" Live Hardware Oscilloscope (Target vs Actual Sensor Echo) ", fg="#10b981", bg="#1e293b", font=("Segoe UI", 9, "bold"), padx=10, pady=8)
@@ -217,6 +234,32 @@ class HardwareDiagnosticsApp(tk.Tk):
         except ValueError:
             messagebox.showerror("Invalid Value", "Please enter a valid number.")
 
+    def toggle_logging(self):
+        if not self.is_logging:
+            import os
+            os.makedirs("logs", exist_ok=True)
+            self.log_filename = f"logs/hardware_run_{time.strftime('%Y%m%d_%H%M%S')}.csv"
+            try:
+                self.log_file = open(self.log_filename, "w", newline="")
+                # Strict C1 CSV format: timestamp,setpoint,distance,error,servo_angle,Kp,Ki,Kd
+                self.log_file.write("timestamp,setpoint,distance,error,servo_angle,Kp,Ki,Kd\n")
+                self.log_file.flush()
+                self.is_logging = True
+                self.log_count = 0
+                self.log_start_time = time.time()
+                self.btn_log.config(text="⏹ Stop Recording CSV", bg="#0284c7")
+                self.status_msg.config(text=f"Recording telemetry to {self.log_filename}", fg="#fbbf24")
+            except Exception as e:
+                messagebox.showerror("Logger Error", str(e))
+        else:
+            self.is_logging = False
+            if self.log_file:
+                self.log_file.close()
+                self.log_file = None
+            self.btn_log.config(text="🔴 Start Recording CSV", bg="#b91c1c")
+            self.status_msg.config(text=f"Saved {self.log_count} samples to {self.log_filename}", fg="#10b981")
+            messagebox.showinfo("Log Saved", f"Successfully logged {self.log_count} samples to:\n{self.log_filename}")
+
     def serial_loop(self):
         while self.is_connected and self.ser and self.ser.is_open:
             try:
@@ -250,6 +293,20 @@ class HardwareDiagnosticsApp(tk.Tk):
 
                     self.servo_hist.pop(0)
                     self.servo_hist.append(self.hw_servo)
+
+                    # Log to CSV if enabled (C1)
+                    if self.is_logging and self.log_file:
+                        t_rel = time.time() - self.log_start_time
+                        try:
+                            kp_v = float(self.inp_p.get())
+                            ki_v = float(self.inp_i.get())
+                            kd_v = float(self.inp_d.get())
+                        except Exception:
+                            kp_v, ki_v, kd_v = 2.0, 0.02, 0.10
+                        row = f"{t_rel:.4f},{self.hw_target:.2f},{self.hw_distance:.2f},{self.hw_error:.2f},{self.hw_servo},{kp_v:.2f},{ki_v:.4f},{kd_v:.2f}\n"
+                        self.log_file.write(row)
+                        self.log_file.flush()
+                        self.log_count += 1
             except Exception:
                 pass
             time.sleep(0.01)
@@ -262,6 +319,12 @@ class HardwareDiagnosticsApp(tk.Tk):
             self.card_err.config(text=f"{sign}{self.hw_error:.1f} cm")
             self.card_srv.config(text=f"{self.hw_servo}°")
             self.live_sensor_lbl.config(text=f"Live Distance: {self.hw_distance:.1f} cm  (Err: {sign}{self.hw_error:.1f})")
+
+        if self.is_logging:
+            dur = time.time() - self.log_start_time
+            self.lbl_log_status.config(text=f"Recording: {self.log_count} pts ({dur:.1f}s)", fg="#fbbf24")
+        else:
+            self.lbl_log_status.config(text="Logger: Idle (Not recording)", fg="#94a3b8")
 
         # Draw real-time oscilloscope
         self.draw_scope()
