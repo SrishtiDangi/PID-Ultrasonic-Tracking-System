@@ -57,6 +57,24 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.plant_damping = 2.0             # N*s/cm
         self.noise_amp = 0.20                # cm
 
+        # Mouse Dragging State (A1)
+        self.is_dragging_ball = False
+        self.is_dragging_servo = False
+        self.last_ball_pixel_pos = (200, 75)
+        self.last_servo_pixel_pos = (850, 100)
+
+        # Disturbance & Recovery State (A4)
+        self.recovery_start_time = None
+        self.recovery_in_progress = False
+        self.constant_wind = 0.0              # cm/s^2
+        self.sensor_dropout_until = 0.0       # timestamp
+        self.noise_burst_until = 0.0
+
+        # Physical Toggles (A5)
+        self.use_ema_filter = True
+        self.use_friction = True
+        self.use_deadband = False
+
         # Trajectory Generator & Metrics State (A8)
         self.traj_time = 0.0
         self.sine_freq = 0.20                 # Hz
@@ -170,6 +188,10 @@ class VisualPIDSimulatorApp(tk.Tk):
 
         self.anim_canvas = tk.Canvas(anim_box, height=150, bg="#060911", highlightthickness=0)
         self.anim_canvas.pack(fill=tk.X, expand=True)
+        # Mouse Drag & Click Bindings (A1)
+        self.anim_canvas.bind("<Button-1>", self.on_rig_click)
+        self.anim_canvas.bind("<B1-Motion>", self.on_rig_drag)
+        self.anim_canvas.bind("<ButtonRelease-1>", self.on_rig_release)
 
         # 3B. Stacked Oscilloscope (A3: r/y, error, servo saturation, pause/step, hover)
         graph_box = tk.Frame(center_frame, bg="#131c2e", highlightthickness=1, highlightbackground="#1e293b")
@@ -223,15 +245,20 @@ class VisualPIDSimulatorApp(tk.Tk):
         btn_row = tk.Frame(ctrl_frame, bg="#131c2e", pady=3)
         btn_row.pack(fill=tk.X)
 
-        tk.Label(btn_row, text="Quick Set:", fg="#94a3b8", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=2)
-        for t_val in [15, 20, 30]:
-            tk.Button(btn_row, text=f"{t_val} cm", command=lambda v=t_val: self.set_target(v), bg="#1e293b", fg="#38bdf8", relief="flat", padx=7, pady=1, font=("Segoe UI", 8, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
+        tk.Label(btn_row, text="Disturbances (A4):", fg="#f59e0b", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="⚡ Push (+10cm)", command=self.apply_nudge, bg="#e11d48", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="💨 Wind", command=lambda: self.apply_disturbance("wind"), bg="#b45309", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="📴 Dropout", command=lambda: self.apply_disturbance("dropout"), bg="#475569", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
+        tk.Button(btn_row, text="💥 Noise", command=lambda: self.apply_disturbance("burst"), bg="#9333ea", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=2)
 
-        tk.Label(btn_row, text="|", fg="#334155", bg="#131c2e").pack(side=tk.LEFT, padx=5)
+        tk.Label(btn_row, text="|", fg="#334155", bg="#131c2e").pack(side=tk.LEFT, padx=4)
 
-        tk.Button(btn_row, text="⚡ Nudge Ball (+10 cm)", command=self.apply_nudge, bg="#e11d48", fg="white", relief="flat", padx=9, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=3)
-        tk.Button(btn_row, text="🌊 Toggle Sine / Step", command=self.toggle_trajectory, bg="#0284c7", fg="white", relief="flat", padx=9, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=3)
-        tk.Button(btn_row, text="Reset IAE", command=self.reset_metrics, bg="#1e293b", fg="#94a3b8", relief="flat", padx=7, pady=2, font=("Segoe UI", 7), cursor="hand2").pack(side=tk.LEFT, padx=3)
+        self.btn_ema = tk.Button(btn_row, text="EMA Filter: ON", command=self.toggle_ema, bg="#10b981", fg="white", relief="flat", padx=6, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2")
+        self.btn_ema.pack(side=tk.LEFT, padx=2)
+
+        tk.Label(btn_row, text="| Quick Set:", fg="#94a3b8", bg="#131c2e", font=("Segoe UI", 7)).pack(side=tk.LEFT, padx=2)
+        for t_val in [15, 25, 35]:
+            tk.Button(btn_row, text=f"{t_val}cm", command=lambda v=t_val: self.set_target(v), bg="#1e293b", fg="#38bdf8", relief="flat", padx=5, pady=1, font=("Segoe UI", 7), cursor="hand2").pack(side=tk.LEFT, padx=1)
 
     def make_badge(self, parent, title, val, color, col):
         card = tk.Frame(parent, bg="#131c2e", padx=8, pady=4, highlightthickness=1, highlightbackground="#1e293b")
@@ -372,6 +399,71 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.bind("<Key-n>", lambda e: self.apply_nudge())
         self.bind("<Key-r>", lambda e: self.reset_metrics())
 
+    def on_rig_click(self, event):
+        mx, my = event.x, event.y
+        w = self.anim_canvas.winfo_width()
+        bx, by = self.last_ball_pixel_pos
+        sx, sy = self.last_servo_pixel_pos
+
+        if (mx - bx)**2 + (my - by)**2 < 25**2:
+            self.is_dragging_ball = True
+            self.velocity = 0.0
+            return
+
+        if (mx - sx)**2 + (my - sy)**2 < 28**2:
+            self.is_dragging_servo = True
+            return
+
+        start_x = 90
+        end_x = w - 160
+        if start_x <= mx <= end_x:
+            frac = (mx - start_x) / (end_x - start_x)
+            new_tgt = round(3.5 + frac * 44.0, 1)
+            self.set_target(new_tgt)
+
+    def on_rig_drag(self, event):
+        mx, my = event.x, event.y
+        w = self.anim_canvas.winfo_width()
+        start_x = 90
+        end_x = w - 160
+
+        if self.is_dragging_ball:
+            frac = max(0.0, min(1.0, (mx - start_x) / (end_x - start_x)))
+            self.position = 3.5 + frac * 44.0
+            self.velocity = 0.0
+            self.reset_metrics()
+        elif self.is_dragging_servo:
+            sx, sy = self.last_servo_pixel_pos
+            angle_rad = math.atan2(my - sy, mx - sx)
+            deg = math.degrees(angle_rad) + 180.0
+            self.servo_angle = max(20.0, min(160.0, deg))
+
+    def on_rig_release(self, event):
+        self.is_dragging_ball = False
+        self.is_dragging_servo = False
+
+    def toggle_ema(self):
+        self.use_ema_filter = not self.use_ema_filter
+        if self.use_ema_filter:
+            self.btn_ema.config(text="EMA Filter: ON", bg="#10b981")
+        else:
+            self.btn_ema.config(text="EMA Filter: OFF", bg="#b91c1c")
+
+    def apply_disturbance(self, dist_type):
+        self.recovery_start_time = time.time()
+        self.recovery_in_progress = True
+        self.reset_metrics()
+
+        if dist_type == "wind":
+            self.constant_wind = 4.5
+            self.status_msg.config(text="Disturbance: Wind (+4.5 N side force)", fg="#f59e0b")
+        elif dist_type == "dropout":
+            self.sensor_dropout_until = time.time() + 1.2
+            self.status_msg.config(text="Disturbance: Sensor Echo Dropout (1.2s)", fg="#ef4444")
+        elif dist_type == "burst":
+            self.noise_burst_until = time.time() + 1.0
+            self.status_msg.config(text="Disturbance: Acoustic Noise Burst!", fg="#c084fc")
+
     def toggle_pause(self):
         self.is_paused = not self.is_paused
         if self.is_paused:
@@ -425,7 +517,10 @@ class VisualPIDSimulatorApp(tk.Tk):
     def apply_nudge(self):
         self.position = min(46.0, self.position + 10.0)
         self.velocity += 14.0
+        self.recovery_start_time = time.time()
+        self.recovery_in_progress = True
         self.reset_metrics()
+        self.status_msg.config(text="Disturbance: Manual Push (+10 cm)!", fg="#ef4444")
 
     def reset_metrics(self):
         self.step_start_time = time.time()
@@ -518,11 +613,30 @@ class VisualPIDSimulatorApp(tk.Tk):
             self.step_itae = 0.0
             self.prev_step_target = self.target
 
-        # Ultrasonic Noise & Filter
-        noise = random.gauss(0, self.noise_amp)
-        raw_dist = max(2.0, min(50.0, self.position + noise))
-        self.smoothed_dist = (self.alpha_dist * raw_dist) + ((1.0 - self.alpha_dist) * self.smoothed_dist)
+        # Ultrasonic Noise & Filter (A4, A5)
+        now_ts = time.time()
+        if now_ts < self.sensor_dropout_until:
+            raw_dist = 0.0 # Dropped echo
+        elif now_ts < self.noise_burst_until:
+            raw_dist = max(2.0, min(50.0, self.position + random.gauss(0, 3.2)))
+        else:
+            noise = random.gauss(0, self.noise_amp)
+            raw_dist = max(2.0, min(50.0, self.position + noise))
+
+        if self.use_ema_filter and raw_dist > 0.5:
+            self.smoothed_dist = (self.alpha_dist * raw_dist) + ((1.0 - self.alpha_dist) * self.smoothed_dist)
+        else:
+            self.smoothed_dist = raw_dist
+
         error = self.target - self.smoothed_dist
+
+        # Check Disturbance Recovery (A4)
+        if self.recovery_in_progress and self.recovery_start_time:
+            if abs(error) < 0.6 and abs(self.velocity) < 1.5:
+                t_rec = time.time() - self.recovery_start_time
+                self.status_msg.config(text=f"Recovered in {t_rec:.2f}s (Error < 0.6cm)", fg="#10b981")
+                self.recovery_in_progress = False
+                self.constant_wind = 0.0
 
         # A8 Metrics: Cumulative Step IAE [cm*s] & ITAE [cm*s^2]
         t_elapsed = max(0.0, time.time() - self.step_start_time)
@@ -559,13 +673,15 @@ class VisualPIDSimulatorApp(tk.Tk):
             self.beam_angle = (self.servo_angle - 90.0) * 0.35 # max +/- 22 deg
             g = 980.0 # cm/s^2
             theta_rad = math.radians(self.beam_angle)
-            self.acceleration = (5.0 / 7.0) * g * math.sin(theta_rad) - (self.plant_damping * self.velocity)
+            damping_term = (self.plant_damping * self.velocity) if self.use_friction else 0.0
+            self.acceleration = (5.0 / 7.0) * g * math.sin(theta_rad) - damping_term + self.constant_wind
             self.velocity += self.acceleration * dt
             self.position += self.velocity * dt
             self.ball_rotation = (self.ball_rotation + (self.velocity * dt / 0.15)) % 360.0
         else:
             tilt_rad = math.radians(self.servo_angle - 90.0)
-            net_force = 120.0 * math.sin(tilt_rad) - (self.plant_damping * self.velocity)
+            damping_term = (self.plant_damping * self.velocity) if self.use_friction else 0.0
+            net_force = 120.0 * math.sin(tilt_rad) - damping_term + self.constant_wind
             self.acceleration = net_force / self.plant_mass
             self.velocity += self.acceleration * dt
             self.position += self.velocity * dt
@@ -623,6 +739,7 @@ class VisualPIDSimulatorApp(tk.Tk):
         pos_frac = (self.position - 3.5) / 44.0
         ball_x = x1 + pos_frac * (x2 - x1)
         ball_y = y1 + pos_frac * (y2 - y1) - 10
+        self.last_ball_pixel_pos = (ball_x, ball_y)
 
         # Ball Shadow
         c.create_oval(ball_x - 7, ball_y + 6, ball_x + 7, ball_y + 11, fill="#030712", outline="")
@@ -695,6 +812,7 @@ class VisualPIDSimulatorApp(tk.Tk):
         # Servo Motor on Right
         servo_x = w - 75
         servo_y = h - 45
+        self.last_servo_pixel_pos = (servo_x, servo_y)
         c.create_rectangle(servo_x - 18, servo_y - 18, servo_x + 18, servo_y + 18, fill="#0284c7", outline="#38bdf8", width=1.5)
         c.create_oval(servo_x - 5, servo_y - 5, servo_x + 5, servo_y + 5, fill="#ffffff")
 

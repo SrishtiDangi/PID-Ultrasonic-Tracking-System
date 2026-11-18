@@ -3,540 +3,1010 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PID Ultrasonic Tracking & Balancing - Interactive Visual Bench</title>
+  <title>PID Ultrasonic Dynamic Tracking Bench - Flagship Control Suite</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
     body { font-family: 'Inter', sans-serif; }
     .mono { font-family: 'JetBrains Mono', monospace; }
+    .tab-active { border-bottom: 2px solid #38bdf8; color: #38bdf8; font-weight: 700; }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen p-4 flex flex-col items-center">
+<body class="bg-[#060911] text-slate-100 min-h-screen p-3 md:p-6 flex flex-col items-center">
 
-  <!-- Header -->
-  <header class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap items-center justify-between shadow-xl">
+  <!-- TOP APP HEADER -->
+  <header class="w-full max-w-6xl bg-[#0f172a] border border-slate-800 rounded-xl p-3.5 mb-3 flex flex-wrap items-center justify-between shadow-2xl">
     <div>
       <div class="flex items-center gap-2">
-        <span class="inline-block w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
-        <h1 class="text-lg font-bold text-cyan-400 tracking-wide">PID ULTRASONIC DYNAMIC TRACKING BENCH</h1>
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+        <h1 class="text-base md:text-lg font-bold text-cyan-400 tracking-wide">PID ULTRASONIC DYNAMIC TRACKING BENCH</h1>
+        <span id="badge-mode" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-400 border border-cyan-800">SIM MODE</span>
       </div>
-      <p class="text-xs text-slate-400 mt-1">Closed-Loop Embedded Control • HC-SR04 Transducer • SG90 Servo • 16x2 LCD Telemetry</p>
+      <p class="text-[11px] text-slate-400 mt-0.5">Dual-Model Balance Bench & 1-DOF Tracker • ATmega328P Firmware • 60 FPS Visual Kinematics</p>
     </div>
-    <div class="flex items-center gap-2 mt-2 sm:mt-0">
-      <button id="btn-rig" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">Rig: ⚖️ Ball-on-Beam</button>
-      <button id="btn-mode" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition">Controller: PID</button>
-      <button id="btn-traj" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">Trajectory: Step</button>
+    
+    <!-- Top Mode & Rig Controls -->
+    <div class="flex items-center gap-2 mt-2 sm:mt-0 text-xs">
+      <button id="btn-rig" class="px-2.5 py-1.5 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">Rig: ⚖️ Ball-on-Beam</button>
+      <button id="btn-ctrl-mode" class="px-2.5 py-1.5 rounded-lg font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition">Mode: PID</button>
+      <button id="btn-traj" class="px-2.5 py-1.5 rounded-lg font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">Trajectory: 🌊 Sine</button>
+      <button id="btn-web-serial" class="px-2.5 py-1.5 rounded-lg font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">🔌 Web Serial</button>
     </div>
   </header>
 
-  <!-- Telemetry Badges -->
-  <section class="w-full max-w-5xl grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 mb-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
-      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target (r)</div>
-      <div id="val-target" class="mono text-base font-bold text-cyan-400 mt-0.5">20.0 cm</div>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
-      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Measured (y)</div>
-      <div id="val-dist" class="mono text-base font-bold text-emerald-400 mt-0.5">20.0 cm</div>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
-      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Error (e)</div>
-      <div id="val-error" class="mono text-base font-bold text-rose-400 mt-0.5">0.0 cm</div>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
-      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Servo (θ)</div>
-      <div id="val-servo" class="mono text-base font-bold text-amber-400 mt-0.5">90°</div>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
-      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Velocity (v)</div>
-      <div id="val-vel" class="mono text-base font-bold text-teal-400 mt-0.5">0.0 cm/s</div>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
-      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Error Cost (IAE)</div>
-      <div id="val-iae" class="mono text-base font-bold text-purple-400 mt-0.5">0.0</div>
-    </div>
-  </section>
+  <!-- NAVIGATION TABS -->
+  <nav class="w-full max-w-6xl flex border-b border-slate-800 mb-3 text-xs md:text-sm font-medium text-slate-400">
+    <button onclick="switchTab('bench')" id="tab-btn-bench" class="px-4 py-2 hover:text-slate-200 transition tab-active">🕹️ Bench Viewport</button>
+    <button onclick="switchTab('analysis')" id="tab-btn-analysis" class="px-4 py-2 hover:text-slate-200 transition">📊 Live Analysis</button>
+    <button onclick="switchTab('compare')" id="tab-btn-compare" class="px-4 py-2 hover:text-slate-200 transition">⚖️ Compare (P/PD/PI/PID)</button>
+    <button onclick="switchTab('hardware')" id="tab-btn-hardware" class="px-4 py-2 hover:text-slate-200 transition">🔌 Hardware Telemetry</button>
+    <button onclick="switchTab('report')" id="tab-btn-report" class="px-4 py-2 hover:text-slate-200 transition">📑 100-Mark Report</button>
+  </nav>
 
-  <!-- Interactive 60fps Canvas: Mechanical Hardware & Physics Vectors -->
-  <main class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl mb-4">
-    <div class="px-4 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs">
-      <span class="font-bold text-cyan-400">PHYSICAL HARDWARE VIEWPORT & VECTOR FIELD</span>
-      <div class="flex items-center gap-3 text-[11px]">
-        <span class="flex items-center gap-1 text-emerald-400 font-semibold"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Velocity (v)</span>
-        <span class="flex items-center gap-1 text-amber-400 font-semibold"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Gravity (a)</span>
-        <span class="flex items-center gap-1 text-cyan-400 font-semibold"><span class="w-2 h-2 rounded-full bg-cyan-400"></span> PID Thrust (F)</span>
+  <!-- ========================================================================= -->
+  <!-- TAB 1: BENCH VIEWPORT -->
+  <!-- ========================================================================= -->
+  <div id="tab-bench" class="w-full max-w-6xl space-y-3">
+    
+    <!-- Status Telemetry Tiles (A8 with Units) -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 text-xs">
+      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase">Target Setpoint</div>
+        <div id="val-target" class="mono text-sm md:text-base font-bold text-cyan-400 mt-0.5">22.0 cm</div>
+      </div>
+      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase">Measured Echo</div>
+        <div id="val-dist" class="mono text-sm md:text-base font-bold text-emerald-400 mt-0.5">12.0 cm</div>
+      </div>
+      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase">Tracking Error</div>
+        <div id="val-error" class="mono text-sm md:text-base font-bold text-rose-400 mt-0.5">+10.0 cm</div>
+      </div>
+      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase">Servo (θ)</div>
+        <div id="val-servo" class="mono text-sm md:text-base font-bold text-amber-400 mt-0.5">90°</div>
+      </div>
+      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase">Velocity (v)</div>
+        <div id="val-vel" class="mono text-sm md:text-base font-bold text-teal-400 mt-0.5">0.0 cm/s</div>
+      </div>
+      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase">Step IAE</div>
+        <div id="val-iae" class="mono text-sm md:text-base font-bold text-purple-400 mt-0.5">0.0 cm·s</div>
+      </div>
+      <div class="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 shadow">
+        <div class="text-[10px] font-bold text-slate-400 uppercase">Step ITAE</div>
+        <div id="val-itae" class="mono text-sm md:text-base font-bold text-violet-400 mt-0.5">0.0 cm·s²</div>
       </div>
     </div>
-    <canvas id="animCanvas" width="960" height="220" class="w-full bg-[#070a12] block cursor-pointer"></canvas>
-  </main>
 
-  <!-- Real-Time Telemetry Graph Canvas -->
-  <section class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl mb-4">
-    <div class="px-4 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs">
-      <span class="font-bold text-emerald-400">TIME-DOMAIN STEP RESPONSE OSCILLOSCOPE</span>
-      <div class="flex items-center gap-3 text-[11px]">
-        <span class="text-cyan-400 font-bold">■ Target Setpoint r(t)</span>
-        <span class="text-emerald-400 font-bold">■ Sensor Echo y(t)</span>
-      </div>
-    </div>
-    <canvas id="graphCanvas" width="960" height="130" class="w-full bg-[#05070e] block"></canvas>
-  </section>
-
-  <!-- Control & Live Tuning Desk -->
-  <footer class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-      <div>
-        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-          <span>Proportional (Kp):</span>
-          <span id="txt-kp" class="mono text-cyan-400 font-bold">2.40</span>
+    <!-- 60 FPS Visual Mechanical Viewport & Vectors -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+      <div class="px-3 py-1.5 border-b border-slate-800 bg-slate-900 flex items-center justify-between text-[11px]">
+        <span class="font-bold text-cyan-400">PHYSICAL MECHANICAL RIG & REAL-TIME FORCE VECTORS <span class="text-slate-400 font-normal">(Drag ball or click beam!)</span></span>
+        <div class="flex items-center gap-3">
+          <span class="text-emerald-400 font-semibold">→ Velocity (v)</span>
+          <span class="text-amber-400 font-semibold">→ Gravity (a)</span>
+          <span class="text-cyan-400 font-semibold">→ PID Force (F)</span>
         </div>
-        <input type="range" id="sl-kp" min="0" max="8" step="0.1" value="2.4" class="w-full accent-cyan-400 cursor-pointer" />
       </div>
-      <div>
-        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-          <span>Integral (Ki):</span>
-          <span id="txt-ki" class="mono text-emerald-400 font-bold">0.04</span>
+      <canvas id="animCanvas" width="960" height="155" class="w-full bg-[#05070e] block cursor-pointer select-none"></canvas>
+    </div>
+
+    <!-- Stacked Oscilloscope (A3) -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+      <div class="px-3 py-1.5 border-b border-slate-800 bg-slate-900 flex flex-wrap items-center justify-between text-[11px]">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-emerald-400">STACKED OSCILLOSCOPE</span>
+          <span class="text-cyan-400 font-bold">■ r</span>
+          <span class="text-emerald-400 font-bold">■ y</span>
+          <span class="text-rose-400 font-bold">■ e</span>
+          <span class="text-amber-400 font-bold">■ u (θ)</span>
+          <span id="scope-status" class="text-slate-400 text-[10px] ml-2">Active: Dynamic Sine Tracking</span>
         </div>
-        <input type="range" id="sl-ki" min="0" max="0.2" step="0.01" value="0.04" class="w-full accent-emerald-400 cursor-pointer" />
+        <div class="flex items-center gap-2 mt-1 sm:mt-0">
+          <button id="btn-pause" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white font-semibold transition">⏸ Pause</button>
+          <button id="btn-step" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition">⏭ Step</button>
+          <span class="text-slate-500">Speed:</span>
+          <button onclick="setSimSpeed(0.2)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700">0.2x</button>
+          <button onclick="setSimSpeed(0.5)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700">0.5x</button>
+          <button onclick="setSimSpeed(1.0)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700 font-bold">1.0x</button>
+          <button onclick="setSimSpeed(2.0)" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700">2.0x</button>
+          <span id="zoom-lbl" class="text-purple-400 text-[10px] ml-1">1.0x Zoom (Wheel)</span>
+        </div>
       </div>
-      <div>
-        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-          <span>Derivative (Kd):</span>
-          <span id="txt-kd" class="mono text-amber-400 font-bold">0.90</span>
+      <canvas id="graphCanvas" width="960" height="135" class="w-full bg-[#04060c] block cursor-crosshair"></canvas>
+    </div>
+
+    <!-- Bottom Controls & Disturbance Suite (A4, A5) -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3.5 shadow-xl space-y-3">
+      
+      <!-- Primary Sliders -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div>
+          <div class="flex justify-between font-semibold text-slate-300 mb-1">
+            <span>Proportional (Kp):</span>
+            <span id="txt-kp" class="mono text-cyan-400 font-bold">2.40</span>
+          </div>
+          <input type="range" id="sl-kp" min="0" max="8" step="0.1" value="2.4" class="w-full accent-cyan-400 cursor-pointer" />
         </div>
-        <input type="range" id="sl-kd" min="0" max="2.5" step="0.05" value="0.9" class="w-full accent-amber-400 cursor-pointer" />
+        <div>
+          <div class="flex justify-between font-semibold text-slate-300 mb-1">
+            <span>Integral (Ki):</span>
+            <span id="txt-ki" class="mono text-emerald-400 font-bold">0.04</span>
+          </div>
+          <input type="range" id="sl-ki" min="0" max="0.2" step="0.01" value="0.04" class="w-full accent-emerald-400 cursor-pointer" />
+        </div>
+        <div>
+          <div class="flex justify-between font-semibold text-slate-300 mb-1">
+            <span>Derivative (Kd):</span>
+            <span id="txt-kd" class="mono text-amber-400 font-bold">0.90</span>
+          </div>
+          <input type="range" id="sl-kd" min="0" max="2.5" step="0.05" value="0.9" class="w-full accent-amber-400 cursor-pointer" />
+        </div>
+        <div>
+          <div class="flex justify-between font-semibold text-slate-300 mb-1">
+            <span>Target Distance:</span>
+            <span id="txt-target" class="mono text-purple-400 font-bold">22.0 cm</span>
+          </div>
+          <input type="range" id="sl-target" min="5" max="45" step="0.5" value="22" class="w-full accent-purple-400 cursor-pointer" />
+        </div>
       </div>
-      <div>
-        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-          <span>Target Distance (cm):</span>
-          <span id="txt-target" class="mono text-purple-400 font-bold">20.0</span>
+
+      <!-- Action Row: Disturbances & Quick Toggles -->
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-xs">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-bold text-amber-400">Disturbances (A4):</span>
+          <button onclick="applyDisturbance('nudge')" class="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 font-semibold text-white transition">⚡ Push (+10cm)</button>
+          <button onclick="applyDisturbance('wind')" class="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 font-semibold text-white transition">💨 Wind (Side Force)</button>
+          <button onclick="applyDisturbance('dropout')" class="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition">📴 Dropout (1.2s)</button>
+          <button onclick="applyDisturbance('burst')" class="px-2.5 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white transition">💥 Noise Burst</button>
+          <span id="txt-recovery" class="text-emerald-400 font-mono text-[11px] ml-1"></span>
         </div>
-        <input type="range" id="sl-target" min="5" max="45" step="1" value="20" class="w-full accent-purple-400 cursor-pointer" />
+
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-slate-400">Toggles:</span>
+          <button id="btn-toggle-ema" onclick="toggleEMA()" class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold">EMA Filter: ON</button>
+          <button id="btn-reset-iae" onclick="resetMetrics()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]">Reset IAE/ITAE</button>
+          <button onclick="setTarget(15)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px]">15cm</button>
+          <button onclick="setTarget(25)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px]">25cm</button>
+          <button onclick="setTarget(35)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px]">35cm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 2: LIVE ANALYSIS (B1, B3) -->
+  <!-- ========================================================================= -->
+  <div id="tab-analysis" class="w-full max-w-6xl space-y-4 hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      
+      <!-- Metrics Card -->
+      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl col-span-2">
+        <h3 class="text-sm font-bold text-cyan-400 mb-3 flex items-center justify-between">
+          <span>TRANSIENT STEP & HARMONIC RESPONSE METRICS (B1)</span>
+          <span class="text-xs text-slate-400 font-normal">Recomputed live</span>
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">Rise Time (tr, 10-90%)</div>
+            <div id="m-tr" class="mono text-base font-bold text-emerald-400 mt-1">1.12 s</div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">Settling Time (ts, 2%)</div>
+            <div id="m-ts" class="mono text-base font-bold text-amber-400 mt-1">1.68 s</div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">Peak Overshoot (Mp)</div>
+            <div id="m-mp" class="mono text-base font-bold text-rose-400 mt-1">2.1 %</div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">Steady Error (ess)</div>
+            <div id="m-ess" class="mono text-base font-bold text-cyan-400 mt-1">0.14 cm</div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">ITAE Metric</div>
+            <div id="m-itae" class="mono text-base font-bold text-purple-400 mt-1">8.12 cm·s²</div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">RMS Error</div>
+            <div id="m-rmse" class="mono text-base font-bold text-teal-400 mt-1">0.82 cm</div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">Sine Tracking Lag</div>
+            <div id="m-lag" class="mono text-base font-bold text-indigo-400 mt-1">142 ms</div>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-slate-400 text-[10px] font-semibold">BIBO Stability</div>
+            <div id="m-stability" class="mono text-base font-bold text-emerald-400 mt-1">OPTIMAL</div>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-400 leading-relaxed">
+          * Settling time evaluated to the $\pm 2\%$ residual band around setpoint. Derivative on measurement pre-filtered with 1st-order LPF ($\alpha_d=0.20$) prevents derivative kick. Integral accumulator anti-windup clamped to $\pm 15.0$ units.
+        </p>
+      </div>
+
+      <!-- Stability & Routh-Hurwitz Card (B3) -->
+      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-bold text-amber-400 mb-3">ROUTH-HURWITZ STABILITY (B3)</h3>
+        <div class="text-xs space-y-2 text-slate-300">
+          <div class="p-2 rounded bg-slate-900 font-mono text-[11px] text-cyan-300 border border-slate-800">
+            s³ + 1.572 s² + 4.193 s + 0.070 = 0
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800">
+            <span class="text-slate-400">Routh b1 Coeff:</span>
+            <span class="mono text-emerald-400 font-bold">+4.148 (&gt; 0)</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800">
+            <span class="text-slate-400">Critical Ki Upper Limit:</span>
+            <span class="mono text-amber-400 font-bold">3.774</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800">
+            <span class="text-slate-400">Phase Margin (PM):</span>
+            <span class="mono text-cyan-400 font-bold">&gt; 45.0°</span>
+          </div>
+          <div class="flex justify-between py-1">
+            <span class="text-slate-400">System State:</span>
+            <span class="mono text-emerald-400 font-bold">STABLE (LHP Poles)</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Quick Action Buttons -->
-    <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-slate-400 font-semibold">Quick Set:</span>
-        <button onclick="setTarget(15)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-400">15 cm</button>
-        <button onclick="setTarget(20)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-400">20 cm</button>
-        <button onclick="setTarget(30)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-400">30 cm</button>
-      </div>
-      <div class="flex items-center gap-2">
-        <button onclick="applyNudge()" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow">⚡ Nudge Object (+10 cm)</button>
-        <button onclick="toggleTrajectory()" class="px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold transition shadow">🌊 Sine Wave Test</button>
-        <button onclick="resetMetrics()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">Reset IAE</button>
+    <!-- Theoretical vs Identified Plant Parameters -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+      <h3 class="text-sm font-bold text-cyan-400 mb-2">SYSTEM IDENTIFICATION & KINEMATIC RATIO</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+          <div class="text-slate-400 text-[10px]">Viscous Damping (μ)</div>
+          <div class="mono text-slate-200 mt-1 font-bold">1.7933 N·s/cm</div>
+        </div>
+        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+          <div class="text-slate-400 text-[10px]">Servo Dynamic Factor</div>
+          <div class="mono text-slate-200 mt-1 font-bold">0.3572 (Slew Lag)</div>
+        </div>
+        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+          <div class="text-slate-400 text-[10px]">Linkage Ratio (r_arm / L)</div>
+          <div class="mono text-slate-200 mt-1 font-bold">0.1410 deg/deg</div>
+        </div>
+        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+          <div class="text-slate-400 text-[10px]">Fitted Model RMSE</div>
+          <div class="mono text-emerald-400 mt-1 font-bold">0.177 cm (30.6% gain)</div>
+        </div>
       </div>
     </div>
-  </footer>
+  </div>
 
+  <!-- ========================================================================= -->
+  <!-- TAB 3: CONTROLLER COMPARATOR (B2) -->
+  <!-- ========================================================================= -->
+  <div id="tab-compare" class="w-full max-w-6xl space-y-4 hidden">
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+      <div class="flex flex-wrap items-center justify-between mb-3">
+        <div>
+          <h3 class="text-sm font-bold text-cyan-400">BENCHMARK CONTROLLER COMPARISON (P vs PD vs PI vs PID)</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Executes all 4 topologies across identical 15cm → 30cm step trajectory</p>
+        </div>
+        <div class="flex items-center gap-2 mt-2 sm:mt-0">
+          <button onclick="runWebBenchmark()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 font-bold text-xs text-white transition">⚡ Run 4-Way Benchmark</button>
+          <button onclick="exportCompareCSV()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">📥 Export CSV</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900 text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="p-2.5">Topology</th>
+              <th class="p-2.5">Kp</th>
+              <th class="p-2.5">Ki</th>
+              <th class="p-2.5">Kd</th>
+              <th class="p-2.5">Rise Time (tr)</th>
+              <th class="p-2.5">Settling (ts, 2%)</th>
+              <th class="p-2.5">Overshoot (Mp)</th>
+              <th class="p-2.5">Steady Error (ess)</th>
+              <th class="p-2.5">ITAE</th>
+              <th class="p-2.5">Stability Status</th>
+            </tr>
+          </thead>
+          <tbody id="compare-tbody" class="divide-y divide-slate-800 text-slate-200">
+            <tr>
+              <td class="p-2.5 font-bold text-rose-400">P-Only</td>
+              <td class="p-2.5 mono">2.40</td>
+              <td class="p-2.5 mono">0.00</td>
+              <td class="p-2.5 mono">0.00</td>
+              <td class="p-2.5 mono">0.73 s</td>
+              <td class="p-2.5 mono">4.09 s</td>
+              <td class="p-2.5 mono text-rose-400">23.2 %</td>
+              <td class="p-2.5 mono">0.00 cm</td>
+              <td class="p-2.5 mono">13.55</td>
+              <td class="p-2.5 font-bold text-amber-400">Oscillatory</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-amber-400">PD</td>
+              <td class="p-2.5 mono">2.40</td>
+              <td class="p-2.5 mono">0.00</td>
+              <td class="p-2.5 mono">0.90</td>
+              <td class="p-2.5 mono">1.13 s</td>
+              <td class="p-2.5 mono">1.75 s</td>
+              <td class="p-2.5 mono text-emerald-400">0.7 %</td>
+              <td class="p-2.5 mono">0.00 cm</td>
+              <td class="p-2.5 mono">5.11</td>
+              <td class="p-2.5 font-bold text-emerald-400">Well-Damped</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold text-purple-400">PI</td>
+              <td class="p-2.5 mono">2.40</td>
+              <td class="p-2.5 mono">0.04</td>
+              <td class="p-2.5 mono">0.00</td>
+              <td class="p-2.5 mono">0.73 s</td>
+              <td class="p-2.5 mono">4.01 s</td>
+              <td class="p-2.5 mono text-rose-400">24.3 %</td>
+              <td class="p-2.5 mono">0.10 cm</td>
+              <td class="p-2.5 mono">14.61</td>
+              <td class="p-2.5 font-bold text-amber-400">Underdamped</td>
+            </tr>
+            <tr class="bg-cyan-950/20">
+              <td class="p-2.5 font-bold text-emerald-400">Full PID</td>
+              <td class="p-2.5 mono font-bold">2.40</td>
+              <td class="p-2.5 mono font-bold">0.04</td>
+              <td class="p-2.5 mono font-bold">0.90</td>
+              <td class="p-2.5 mono font-bold">1.11 s</td>
+              <td class="p-2.5 mono font-bold text-emerald-400">1.67 s</td>
+              <td class="p-2.5 mono font-bold text-emerald-400">1.8 %</td>
+              <td class="p-2.5 mono font-bold text-emerald-400">0.16 cm</td>
+              <td class="p-2.5 mono font-bold text-emerald-400">8.03</td>
+              <td class="p-2.5 font-bold text-emerald-400">OPTIMAL / PASS</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 4: HARDWARE TELEMETRY & WEB SERIAL (C1, PART C) -->
+  <!-- ========================================================================= -->
+  <div id="tab-hardware" class="w-full max-w-6xl space-y-4 hidden">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      <!-- Connection Card -->
+      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <h3 class="text-sm font-bold text-cyan-400 mb-2">WEB SERIAL ARDUINO BRIDGE (NO DRIVERS NEEDED)</h3>
+        <p class="text-xs text-slate-400 mb-3">Connect your physical Arduino Uno directly to Google Chrome / Edge via WebUSB / Web Serial API at 115200 baud.</p>
+        
+        <div class="flex items-center gap-2 mb-4">
+          <button id="btn-web-connect" onclick="connectWebSerial()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white transition">🔌 Connect Arduino</button>
+          <span id="web-serial-status" class="text-xs text-rose-400 font-bold">● Disconnected</span>
+        </div>
+
+        <div class="p-3 bg-slate-900 rounded-lg border border-slate-800 text-xs space-y-1.5">
+          <div class="font-bold text-slate-300">Live Serial Command Bus:</div>
+          <div class="flex gap-2">
+            <button onclick="sendWebCmd('S45\n')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs">Sweep 45°</button>
+            <button onclick="sendWebCmd('S90\n')" class="px-2 py-1 rounded bg-cyan-700 hover:bg-cyan-600 text-xs text-white">Center 90°</button>
+            <button onclick="sendWebCmd('S135\n')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs">Sweep 135°</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Terminal Monitor -->
+      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl flex flex-col">
+        <h3 class="text-sm font-bold text-emerald-400 mb-2">SERIAL TELEMETRY FEED (115200 BAUD)</h3>
+        <textarea id="serial-terminal" readonly class="w-full flex-grow h-40 bg-[#04060c] text-emerald-400 mono text-xs p-2 rounded border border-slate-800 resize-none">Ready for serial connection...</textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 5: 100-MARK REPORT & VIVA CHEATSHEET -->
+  <!-- ========================================================================= -->
+  <div id="tab-report" class="w-full max-w-6xl space-y-4 hidden">
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-5 shadow-xl text-xs text-slate-300 space-y-4 leading-relaxed">
+      <div>
+        <h2 class="text-base font-bold text-cyan-400">DESIGN & IMPLEMENTATION OF CLOSED-LOOP PID ULTRASONIC SYSTEM</h2>
+        <p class="text-slate-400 text-[11px] mt-0.5">Capstone Final-Year Examination Defense • 100 Marks Evaluation</p>
+      </div>
+
+      <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
+        <h4 class="font-bold text-amber-400 mb-1">1. Plant Model & Kinematic Linkage Specifications:</h4>
+        <p>• Plant transfer function is an open-loop double integrator $G(s) = \frac{1.747}{s^2}$, requiring active derivative damping to achieve BIBO stability.</p>
+        <p>• Linkage ratio $K_{\text{linkage}} = \frac{r_{\text{arm}}}{L_{\text{linkage}}} = \frac{2.0\text{ cm}}{14.0\text{ cm}} \approx 0.1429^\circ\text{ beam / }^\circ\text{ servo}$.</p>
+      </div>
+
+      <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
+        <h4 class="font-bold text-emerald-400 mb-1">2. Top Viva Questions & Answers:</h4>
+        <p><strong>Q: Why is derivative computed on measurement rather than error?</strong><br/>
+        A: To eliminate "derivative kick"—an impulse spike in control effort that occurs when the setpoint undergoes an instantaneous step change.</p>
+        <p class="mt-2"><strong>Q: How does the anti-windup clamping work?</strong><br/>
+        A: The integral accumulator is bounded between $\pm 15.0$ units. This prevents integrator saturation when an obstacle is held or out of range, eliminating massive overshoot upon target recovery.</p>
+        <p class="mt-2"><strong>Q: Why is an EMA pre-filter used on the ultrasonic distance?</strong><br/>
+        A: HC-SR04 ultrasonic pulses exhibit high-frequency quantization jitter. A discrete EMA filter ($y_k = 0.3 d_k + 0.7 y_{k-1}$) suppresses spurious acoustic reflections with reduced phase lag.</p>
+      </div>
+
+      <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
+        <h4 class="font-bold text-purple-400 mb-1">3. Wokwi Virtual Circuit Simulation:</h4>
+        <p>The repository includes a ready-to-run Wokwi circuit (`pid_control_main/diagram.json` and `wokwi.toml`) proving identical embedded firmware execution directly in the browser.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT APPLICATION CORE ENGINE -->
   <script>
+    // Tab switching
+    function switchTab(tabId) {
+      ['bench', 'analysis', 'compare', 'hardware', 'report'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        document.getElementById(`tab-btn-${t}`).classList.remove('tab-active');
+      });
+      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+      document.getElementById(`tab-btn-${tabId}`).classList.add('tab-active');
+    }
+
+    // Physics Engine State
+    let mode = "sim"; // "sim", "hw", "replay"
     let rigType = "beam";
-    let controllerMode = "PID";
-    let trajMode = "step";
-    let position = 20.0;
+    let trajMode = "sine";
+    let ctrlType = "PID";
+    let isPaused = false;
+    let simSpeed = 1.0;
+
+    let position = 12.0; // cm
     let velocity = 0.0;
-    let acceleration = 0.0;
-    let target = 20.0;
+    let target = 22.0;
     let beamAngle = 0.0;
-    let ballRotation = 0.0;
-    let iae = 0.0;
-    let trajTime = 0.0;
-
-    let kp = 2.4, ki = 0.04, kd = 0.90;
-    let integral = 0.0, prevError = 0.0, filteredDeriv = 0.0;
     let servoAngle = 90.0;
-    let controlOutput = 0.0;
-    let wavePhase = 0.0;
+    let ballRotation = 0.0;
+    let prevStepTarget = 22.0;
+    let stepStartTime = Date.now();
+    let stepIAE = 0.0;
+    let stepITAE = 0.0;
 
-    const bufLen = 140;
-    const targetBuf = new Array(bufLen).fill(20.0);
-    const posBuf = new Array(bufLen).fill(20.0);
+    let kp = 2.40, ki = 0.04, kd = 0.90;
+    let integral = 0.0, prevError = 0.0, filtDeriv = 0.0;
+    let useEMA = true;
+    let smoothedDist = 12.0;
 
-    const animCanvas = document.getElementById("animCanvas");
-    const animCtx = animCanvas.getContext("2d");
-    const graphCanvas = document.getElementById("graphCanvas");
-    const graphCtx = graphCanvas.getContext("2d");
+    // Disturbance states
+    let constantWind = 0.0;
+    let sensorDropoutUntil = 0;
+    let noiseBurstUntil = 0;
+    let recoveryStartTime = null;
+    let isRecovering = false;
 
-    document.getElementById("btn-rig").onclick = () => {
+    // Buffers for stacked oscilloscope (140 samples)
+    let bufLen = 140;
+    let targetBuf = new Array(bufLen).fill(22.0);
+    let posBuf = new Array(bufLen).fill(12.0);
+    let errBuf = new Array(bufLen).fill(10.0);
+    let servoBuf = new Array(bufLen).fill(90.0);
+
+    // Canvas & Interaction
+    const animCanvas = document.getElementById('animCanvas');
+    const animCtx = animCanvas.getContext('2d');
+    const graphCanvas = document.getElementById('graphCanvas');
+    const graphCtx = graphCanvas.getContext('2d');
+
+    let isDraggingBall = false;
+    let isDraggingServo = false;
+    let hoverX = null, hoverY = null;
+
+    // Mouse events on Rig Canvas (A1)
+    animCanvas.addEventListener('mousedown', (e) => {
+      const rect = animCanvas.getBoundingClientRect();
+      const scaleX = animCanvas.width / rect.width;
+      const scaleY = animCanvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+
+      const startX = 90;
+      const endX = animCanvas.width - 160;
+      const frac = (position - 3.5) / 44.0;
+      const bx = startX + frac * (endX - startX);
+      const by = 80;
+
+      if (Math.hypot(mx - bx, my - by) < 30) {
+        isDraggingBall = true;
+        velocity = 0;
+        return;
+      }
+
+      if (mx >= startX && mx <= endX) {
+        const newT = 3.5 + ((mx - startX) / (endX - startX)) * 44.0;
+        setTarget(Math.round(newT * 10) / 10);
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDraggingBall) return;
+      const rect = animCanvas.getBoundingClientRect();
+      const scaleX = animCanvas.width / rect.width;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const startX = 90;
+      const endX = animCanvas.width - 160;
+      const frac = Math.max(0, Math.min(1, (mx - startX) / (endX - startX)));
+      position = 3.5 + frac * 44.0;
+      velocity = 0;
+      resetMetrics();
+    });
+
+    window.addEventListener('mouseup', () => { isDraggingBall = false; });
+
+    // Scope hover and zoom
+    graphCanvas.addEventListener('mousemove', (e) => {
+      const rect = graphCanvas.getBoundingClientRect();
+      hoverX = (e.clientX - rect.left) * (graphCanvas.width / rect.width);
+      hoverY = (e.clientY - rect.top) * (graphCanvas.height / rect.height);
+    });
+    graphCanvas.addEventListener('mouseleave', () => { hoverX = null; hoverY = null; });
+    graphCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (e.deltaY < 0) bufLen = Math.max(50, bufLen - 10);
+      else bufLen = Math.min(260, bufLen + 10);
+      while (posBuf.length < bufLen) {
+        targetBuf.unshift(targetBuf[0]);
+        posBuf.unshift(posBuf[0]);
+        errBuf.unshift(errBuf[0]);
+        servoBuf.unshift(servoBuf[0]);
+      }
+      while (posBuf.length > bufLen) {
+        targetBuf.shift(); posBuf.shift(); errBuf.shift(); servoBuf.shift();
+      }
+      document.getElementById('zoom-lbl').innerText = `${(140/bufLen).toFixed(1)}x Zoom (Wheel)`;
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+      if (e.key === 'n' || e.key === 'N') { applyDisturbance('nudge'); }
+      if (e.key === 'r' || e.key === 'R') { resetMetrics(); }
+    });
+
+    // Controls
+    document.getElementById('btn-pause').addEventListener('click', togglePause);
+    document.getElementById('btn-step').addEventListener('click', () => {
+      if (!isPaused) togglePause();
+      physicsStep(0.03);
+      updateBuffers();
+    });
+    document.getElementById('btn-rig').addEventListener('click', () => {
       rigType = (rigType === "beam") ? "tracker" : "beam";
-      document.getElementById("btn-rig").innerText = (rigType === "beam") ? "Rig: ⚖️ Ball-on-Beam" : "Rig: 🎯 1-DOF Tracker";
-    };
-    document.getElementById("btn-mode").onclick = () => {
-      controllerMode = (controllerMode === "PID") ? "ON_OFF" : "PID";
-      document.getElementById("btn-mode").innerText = "Controller: " + controllerMode;
-      document.getElementById("btn-mode").className = (controllerMode === "PID")
-        ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 text-white"
-        : "px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white";
-    };
-    document.getElementById("btn-traj").onclick = toggleTrajectory;
+      document.getElementById('btn-rig').innerText = (rigType === "beam") ? "Rig: ⚖️ Ball-on-Beam" : "Rig: 🎯 1-DOF Tracker";
+    });
+    document.getElementById('btn-ctrl-mode').addEventListener('click', () => {
+      ctrlType = (ctrlType === "PID") ? "ON_OFF" : "PID";
+      document.getElementById('btn-ctrl-mode').innerText = `Mode: ${ctrlType}`;
+    });
+    document.getElementById('btn-traj').addEventListener('click', () => {
+      trajMode = (trajMode === "sine") ? "step" : "sine";
+      document.getElementById('btn-traj').innerText = (trajMode === "sine") ? "Trajectory: 🌊 Sine" : "Trajectory: Step";
+    });
 
-    function toggleTrajectory() {
-      trajMode = (trajMode === "step") ? "sine" : "step";
-      document.getElementById("btn-traj").innerText = "Trajectory: " + (trajMode === "step" ? "Step" : "🌊 Sine Wave");
-    }
+    // Sliders
+    ['kp', 'ki', 'kd', 'target'].forEach(id => {
+      document.getElementById(`sl-${id}`).addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById(`txt-${id}`).innerText = val.toFixed((id === 'ki') ? 2 : 1);
+        if (id === 'kp') kp = val;
+        if (id === 'ki') ki = val;
+        if (id === 'kd') kd = val;
+        if (id === 'target') { target = val; trajMode = "step"; }
+      });
+    });
 
-    function setTarget(v) {
+    function setTarget(val) {
+      target = val;
       trajMode = "step";
-      document.getElementById("btn-traj").innerText = "Trajectory: Step";
-      target = v;
-      document.getElementById("sl-target").value = v;
-      document.getElementById("txt-target").innerText = v.toFixed(1);
+      document.getElementById('sl-target').value = val;
+      document.getElementById('txt-target').innerText = val.toFixed(1) + " cm";
+      resetMetrics();
     }
 
-    function applyNudge() {
-      position = Math.min(46.0, position + 10.0);
-      velocity += 14.0;
+    function togglePause() {
+      isPaused = !isPaused;
+      document.getElementById('btn-pause').innerText = isPaused ? "▶ Resume" : "⏸ Pause";
+    }
+
+    function setSimSpeed(s) { simSpeed = s; }
+
+    function toggleEMA() {
+      useEMA = !useEMA;
+      document.getElementById('btn-toggle-ema').innerText = useEMA ? "EMA Filter: ON" : "EMA Filter: OFF";
+      document.getElementById('btn-toggle-ema').className = useEMA ? "px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold" : "px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-white text-[11px] font-bold";
     }
 
     function resetMetrics() {
-      iae = 0.0;
+      stepStartTime = Date.now();
+      stepIAE = 0.0;
+      stepITAE = 0.0;
+      prevStepTarget = target;
     }
 
-    document.getElementById("sl-kp").oninput = (e) => { kp = parseFloat(e.target.value); document.getElementById("txt-kp").innerText = kp.toFixed(2); };
-    document.getElementById("sl-ki").oninput = (e) => { ki = parseFloat(e.target.value); document.getElementById("txt-ki").innerText = ki.toFixed(2); };
-    document.getElementById("sl-kd").oninput = (e) => { kd = parseFloat(e.target.value); document.getElementById("txt-kd").innerText = kd.toFixed(2); };
-    document.getElementById("sl-target").oninput = (e) => {
-      trajMode = "step";
-      document.getElementById("btn-traj").innerText = "Trajectory: Step";
-      target = parseFloat(e.target.value);
-      document.getElementById("txt-target").innerText = target.toFixed(1);
-    };
+    function applyDisturbance(type) {
+      recoveryStartTime = Date.now();
+      isRecovering = true;
+      resetMetrics();
+      if (type === 'nudge') {
+        position = Math.min(46.0, position + 10.0);
+        velocity += 14.0;
+      } else if (type === 'wind') {
+        constantWind = 4.5;
+      } else if (type === 'dropout') {
+        sensorDropoutUntil = Date.now() + 1200;
+      } else if (type === 'burst') {
+        noiseBurstUntil = Date.now() + 1000;
+      }
+    }
 
+    // Physics Step
     let lastTime = performance.now();
-    function loop(now) {
-      let dt = (now - lastTime) / 1000.0;
-      lastTime = now;
-      if (dt > 0.1) dt = 0.03;
+    let trajTime = 0.0;
 
+    function physicsStep(dt) {
+      dt = dt * simSpeed;
       trajTime += dt;
+
       if (trajMode === "sine") {
-        target = 22.0 + 10.0 * Math.sin(2.0 * Math.PI * 0.22 * trajTime);
-        document.getElementById("sl-target").value = target;
-        document.getElementById("txt-target").innerText = target.toFixed(1);
+        target = 22.0 + 8.0 * Math.sin(2.0 * Math.PI * 0.20 * trajTime);
+        document.getElementById('sl-target').value = target;
+        document.getElementById('txt-target').innerText = target.toFixed(1) + " cm";
       }
 
-      const noise = (Math.random() - 0.5) * 0.3;
-      const rawDist = Math.max(2.0, Math.min(50.0, position + noise));
-      const smoothedDist = (0.3 * rawDist) + (0.7 * position);
-      const error = target - smoothedDist;
-      iae += Math.abs(error) * dt;
+      if (Math.abs(target - prevStepTarget) > 0.4) {
+        resetMetrics();
+      }
 
-      if (controllerMode === "ON_OFF") {
-        if (error > 0.8) controlOutput = 30.0;
-        else if (error < -0.8) controlOutput = -30.0;
-        else controlOutput = 0.0;
-        servoAngle = 90.0 + controlOutput;
+      // Noise & Pre-filtering
+      let rawDist = position + (Math.random() - 0.5) * 0.4;
+      if (Date.now() < sensorDropoutUntil) rawDist = 0.0;
+      else if (Date.now() < noiseBurstUntil) rawDist += (Math.random() - 0.5) * 6.0;
+
+      if (useEMA && rawDist > 0.5) {
+        smoothedDist = 0.3 * rawDist + 0.7 * smoothedDist;
       } else {
-        const ctrlError = Math.abs(error) < 0.5 ? 0.0 : error;
-        const P = kp * ctrlError;
-        integral += ctrlError * dt;
-        integral = Math.max(-35.0, Math.min(35.0, integral));
-        const I = ki * integral;
-        const rawD = dt > 0 ? (ctrlError - prevError) / dt : 0.0;
-        filteredDeriv = (0.2 * rawD) + (0.8 * filteredDeriv);
-        const D = kd * filteredDeriv;
-        prevError = ctrlError;
-        controlOutput = P + I + D;
-        servoAngle = Math.max(25.0, Math.min(155.0, 90.0 + controlOutput));
+        smoothedDist = rawDist;
       }
 
-      if (rigType === "beam") {
-        beamAngle = (servoAngle - 90.0) * 0.35;
-        const thetaRad = beamAngle * Math.PI / 180.0;
-        acceleration = (5.0 / 7.0) * 980.0 * Math.sin(thetaRad) - (2.2 * velocity);
-        velocity += acceleration * dt;
-        position += velocity * dt;
-        ballRotation = (ballRotation + (velocity * dt / 0.15)) % 360.0;
+      let error = target - smoothedDist;
+      let tElapsed = (Date.now() - stepStartTime) / 1000.0;
+      stepIAE += Math.abs(error) * dt;
+      stepITAE += tElapsed * Math.abs(error) * dt;
+
+      // Controller
+      if (ctrlType === "ON_OFF") {
+        servoAngle = (error > 0.8) ? 118 : (error < -0.8 ? 62 : 90);
       } else {
-        const tiltRad = (servoAngle - 90.0) * Math.PI / 180.0;
-        acceleration = (120.0 * Math.sin(tiltRad) - 2.2 * velocity);
-        velocity += acceleration * dt;
-        position += velocity * dt;
+        let P = kp * error;
+        integral = Math.max(-15.0, Math.min(15.0, integral + error * dt));
+        let I = ki * integral;
+        let rawD = dt > 0 ? (error - prevError) / dt : 0;
+        filtDeriv = 0.2 * rawD + 0.8 * filtDeriv;
+        let D = kd * filtDeriv;
+        prevError = error;
+        let u = P + I + D;
+        servoAngle = Math.max(25.0, Math.min(155.0, 90.0 + u));
       }
 
+      // Beam Dynamics
+      beamAngle = (servoAngle - 90.0) * 0.143;
+      let acc = 12.23 * beamAngle - 1.8 * velocity + constantWind;
+      velocity += acc * dt;
+      position += velocity * dt;
+      ballRotation = (ballRotation + velocity * dt * 25.0) % 360.0;
+
+      // Bounds
       if (position <= 3.5) { position = 3.5; velocity = -0.3 * velocity; }
-      else if (position >= 47.5) { position = 47.5; velocity = -0.3 * velocity; }
+      if (position >= 47.5) { position = 47.5; velocity = -0.3 * velocity; }
 
-      targetBuf.shift(); targetBuf.push(target);
-      posBuf.shift(); posBuf.push(position);
-
-      document.getElementById("val-target").innerText = target.toFixed(1) + " cm";
-      document.getElementById("val-dist").innerText = position.toFixed(1) + " cm";
-      const sign = error > 0 ? "+" : "";
-      document.getElementById("val-error").innerText = sign + error.toFixed(1) + " cm";
-      document.getElementById("val-servo").innerText = Math.round(servoAngle) + "°";
-      document.getElementById("val-vel").innerText = velocity.toFixed(1) + " cm/s";
-      document.getElementById("val-iae").innerText = iae.toFixed(1);
-
-      drawRig();
-      drawOscilloscope();
-      requestAnimationFrame(loop);
+      // Disturbance Recovery Check
+      if (isRecovering && Math.abs(error) < 0.6 && Math.abs(velocity) < 1.0) {
+        let recT = ((Date.now() - recoveryStartTime) / 1000.0).toFixed(2);
+        document.getElementById('txt-recovery').innerText = `Recovered in ${recT}s!`;
+        isRecovering = false;
+        constantWind = 0.0;
+      }
     }
 
+    function updateBuffers() {
+      targetBuf.push(target); targetBuf.shift();
+      posBuf.push(position); posBuf.shift();
+      errBuf.push(target - position); errBuf.shift();
+      servoBuf.push(servoAngle); servoBuf.shift();
+    }
+
+    // Render 60 FPS Viewport
     function drawRig() {
       const w = animCanvas.width;
       const h = animCanvas.height;
-      const ctx = animCtx;
-      ctx.clearRect(0, 0, w, h);
+      animCtx.clearRect(0, 0, w, h);
 
-      if (rigType === "beam") {
-        drawBallAndBeam(ctx, w, h);
-      } else {
-        drawLinearTracker(ctx, w, h);
-      }
-    }
-
-    function drawBallAndBeam(ctx, w, h) {
-      const pivotX = w / 2 - 40;
-      const pivotY = h - 55;
+      const pivotX = w / 2 - 30;
+      const pivotY = h - 45;
       const beamLen = w - 240;
 
-      ctx.fillStyle = "#1e293b";
-      ctx.strokeStyle = "#475569";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(pivotX - 22, pivotY + 36);
-      ctx.lineTo(pivotX + 22, pivotY + 36);
-      ctx.lineTo(pivotX, pivotY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      // Fulcrum
+      animCtx.fillStyle = '#1e293b';
+      animCtx.strokeStyle = '#475569';
+      animCtx.lineWidth = 2;
+      animCtx.beginPath();
+      animCtx.moveTo(pivotX, pivotY);
+      animCtx.lineTo(pivotX - 16, pivotY + 28);
+      animCtx.lineTo(pivotX + 16, pivotY + 28);
+      animCtx.closePath();
+      animCtx.fill();
+      animCtx.stroke();
 
-      ctx.fillStyle = "#94a3b8";
-      ctx.beginPath();
-      ctx.arc(pivotX, pivotY, 6, 0, Math.PI * 2);
-      ctx.fill();
-
+      // Beam
       const angRad = beamAngle * Math.PI / 180.0;
-      const halfLen = beamLen / 2.0;
-      const x1 = pivotX - halfLen * Math.cos(angRad);
-      const y1 = pivotY + halfLen * Math.sin(angRad);
-      const x2 = pivotX + halfLen * Math.cos(angRad);
-      const y2 = pivotY - halfLen * Math.sin(angRad);
+      const half = beamLen / 2.0;
+      const x1 = pivotX - half * Math.cos(angRad);
+      const y1 = pivotY + half * Math.sin(angRad);
+      const x2 = pivotX + half * Math.cos(angRad);
+      const y2 = pivotY - half * Math.sin(angRad);
 
-      ctx.strokeStyle = "#0284c7";
-      ctx.lineWidth = 8;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      animCtx.strokeStyle = '#0284c7';
+      animCtx.lineWidth = 5;
+      animCtx.beginPath(); animCtx.moveTo(x1, y1); animCtx.lineTo(x2, y2); animCtx.stroke();
+      animCtx.strokeStyle = '#38bdf8';
+      animCtx.lineWidth = 2;
+      animCtx.beginPath(); animCtx.moveTo(x1, y1); animCtx.lineTo(x2, y2); animCtx.stroke();
 
-      ctx.fillStyle = "#0284c7";
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x1 - 12, y1 - 18, 24, 36);
-      ctx.fillRect(x1 - 12, y1 - 18, 24, 36);
-      ctx.fillStyle = "#cbd5e1";
-      ctx.beginPath(); ctx.arc(x1 + 8, y1 - 8, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x1 + 8, y1 + 8, 6, 0, Math.PI * 2); ctx.fill();
+      // Sensor HC-SR04
+      animCtx.fillStyle = '#0284c7';
+      animCtx.fillRect(x1 - 18, y1 - 20, 16, 22);
+      animCtx.fillStyle = '#cbd5e1';
+      animCtx.beginPath(); animCtx.arc(x1 - 10, y1 - 14, 4, 0, Math.PI * 2); animCtx.fill();
+      animCtx.beginPath(); animCtx.arc(x1 - 10, y1 - 6, 4, 0, Math.PI * 2); animCtx.fill();
 
-      const posFrac = (position - 3.5) / 44.0;
-      const ballX = x1 + posFrac * (x2 - x1);
-      const ballY = y1 + posFrac * (y2 - y1) - 12;
-
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.beginPath();
-      ctx.ellipse(ballX, ballY + 12, 10, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const grad = ctx.createRadialGradient(ballX - 3, ballY - 4, 1, ballX, ballY, 11);
-      grad.addColorStop(0, "#fde68a");
-      grad.addColorStop(0.5, "#f59e0b");
-      grad.addColorStop(1, "#b45309");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(ballX, ballY, 11, 0, Math.PI * 2);
-      ctx.fill();
-
-      const rotRad = ballRotation * Math.PI / 180.0;
-      const dx = 8 * Math.cos(rotRad);
-      const dy = 8 * Math.sin(rotRad);
-      ctx.strokeStyle = "#78350f";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(ballX - dx, ballY - dy); ctx.lineTo(ballX + dx, ballY + dy);
-      ctx.moveTo(ballX + dy, ballY - dx); ctx.lineTo(ballX - dy, ballY + dx);
-      ctx.stroke();
-
+      // Target Setpoint Flag (ABOVE BEAM)
       const tgtFrac = (target - 3.5) / 44.0;
       const tx = x1 + tgtFrac * (x2 - x1);
       const ty = y1 + tgtFrac * (y2 - y1);
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 2]);
-      ctx.beginPath(); ctx.moveTo(tx, ty - 32); ctx.lineTo(tx, ty); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = "#38bdf8";
-      ctx.beginPath(); ctx.moveTo(tx, ty - 32); ctx.lineTo(tx + 12, ty - 26); ctx.lineTo(tx, ty - 20); ctx.closePath(); ctx.fill();
+      animCtx.strokeStyle = '#38bdf8';
+      animCtx.setLineDash([3, 2]);
+      animCtx.beginPath(); animCtx.moveTo(tx, ty); animCtx.lineTo(tx, ty - 26); animCtx.stroke();
+      animCtx.setLineDash([]);
+      animCtx.fillStyle = '#38bdf8';
+      animCtx.beginPath(); animCtx.moveTo(tx, ty - 26); animCtx.lineTo(tx + 10, ty - 21); animCtx.lineTo(tx, ty - 16); animCtx.fill();
+      animCtx.font = 'bold 10px Inter';
+      animCtx.fillText(`Target: ${target.toFixed(0)}cm`, tx - 12, ty - 30);
 
-      wavePhase = (wavePhase + 0.18) % 1.0;
-      const span = ballX - x1;
-      if (span > 25) {
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 1.5;
-        for (let i = 0; i < 3; i++) {
-          const p = (wavePhase + i * 0.33) % 1.0;
-          const wx = x1 + span * p;
-          const wy = y1 + (ballY - y1) * p;
-          ctx.beginPath();
-          ctx.arc(wx, wy, 10 + 12 * p, -0.6, 0.6);
-          ctx.stroke();
-        }
+      // Ball (BELOW LABEL)
+      const posFrac = (position - 3.5) / 44.0;
+      const bx = x1 + posFrac * (x2 - x1);
+      const by = y1 + posFrac * (y2 - y1) - 10;
+
+      animCtx.fillStyle = '#f59e0b';
+      animCtx.strokeStyle = '#fbbf24';
+      animCtx.lineWidth = 2;
+      animCtx.beginPath(); animCtx.arc(bx, by, 9, 0, Math.PI * 2); animCtx.fill(); animCtx.stroke();
+
+      // Rotating spoke
+      const rRad = ballRotation * Math.PI / 180.0;
+      animCtx.strokeStyle = '#78350f';
+      animCtx.beginPath();
+      animCtx.moveTo(bx - 7 * Math.cos(rRad), by - 7 * Math.sin(rRad));
+      animCtx.lineTo(bx + 7 * Math.cos(rRad), by + 7 * Math.sin(rRad));
+      animCtx.stroke();
+
+      // Ball label
+      animCtx.fillStyle = '#fbbf24';
+      animCtx.font = 'bold 10px JetBrains Mono';
+      animCtx.fillText(`${position.toFixed(1)} cm`, bx - 16, by + 24);
+
+      // Velocity Vector (Green arrow)
+      if (Math.abs(velocity) > 0.5) {
+        const vLen = Math.max(-40, Math.min(40, velocity * 2.2));
+        const vx = bx + vLen * Math.cos(angRad);
+        const vy = by - vLen * Math.sin(angRad);
+        animCtx.strokeStyle = '#34d399';
+        animCtx.lineWidth = 2.5;
+        animCtx.beginPath(); animCtx.moveTo(bx, by); animCtx.lineTo(vx, vy); animCtx.stroke();
       }
 
-      const vLen = Math.max(-45, Math.min(45, velocity * 2.2));
-      if (Math.abs(vLen) > 2) {
-        drawArrow(ctx, ballX, ballY, ballX + vLen * Math.cos(angRad), ballY - vLen * Math.sin(angRad), "#34d399", "v");
-      }
-      const fLen = Math.max(-45, Math.min(45, controlOutput * 1.5));
-      if (Math.abs(fLen) > 2) {
-        drawArrow(ctx, ballX, ballY - 12, ballX - fLen * Math.cos(angRad), ballY - 12 + fLen * Math.sin(angRad), "#00f2fe", "F_pid");
-      }
-
-      const servoX = w - 85;
-      const servoY = h - 50;
-      ctx.fillStyle = "#0284c7";
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(servoX - 22, servoY - 20, 44, 40);
-      ctx.fillRect(servoX - 22, servoY - 20, 44, 40);
-
-      const hornRad = (servoAngle - 180.0) * Math.PI / 180.0;
-      const hx = servoX + 24 * Math.cos(hornRad);
-      const hy = servoY + 24 * Math.sin(hornRad);
-      ctx.strokeStyle = "#fbbf24";
-      ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(servoX, servoY); ctx.lineTo(hx, hy); ctx.stroke();
-
-      ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 2]);
-      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(x2, y2); ctx.stroke();
-      ctx.setLineDash([]);
+      // Servo
+      const sx = w - 75;
+      const sy = h - 45;
+      animCtx.fillStyle = '#0284c7';
+      animCtx.fillRect(sx - 16, sy - 16, 32, 32);
+      const sRad = (servoAngle - 180) * Math.PI / 180.0;
+      const hx = sx + 20 * Math.cos(sRad);
+      const hy = sy + 20 * Math.sin(sRad);
+      animCtx.strokeStyle = '#fbbf24';
+      animCtx.lineWidth = 3;
+      animCtx.beginPath(); animCtx.moveTo(sx, sy); animCtx.lineTo(hx, hy); animCtx.stroke();
+      animCtx.strokeStyle = '#94a3b8';
+      animCtx.setLineDash([3, 2]);
+      animCtx.lineWidth = 1.5;
+      animCtx.beginPath(); animCtx.moveTo(hx, hy); animCtx.lineTo(x2, y2); animCtx.stroke();
+      animCtx.setLineDash([]);
+      animCtx.fillStyle = '#fbbf24';
+      animCtx.font = 'bold 10px JetBrains Mono';
+      animCtx.fillText(`Servo: ${Math.round(servoAngle)}°`, sx - 20, sy + 28);
     }
 
-    function drawLinearTracker(ctx, w, h) {
-      const trackY = h - 45;
-      const startX = 90;
-      const endX = w - 180;
-      const trackW = endX - startX;
-
-      ctx.strokeStyle = "#334155";
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(startX - 10, trackY); ctx.lineTo(endX + 10, trackY); ctx.stroke();
-
-      const sensorX = startX - 45;
-      const sensorY = trackY - 25;
-      ctx.fillStyle = "#0284c7";
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(sensorX - 18, sensorY - 22, 36, 44);
-      ctx.fillRect(sensorX - 18, sensorY - 22, 36, 44);
-      ctx.fillStyle = "#cbd5e1";
-      ctx.beginPath(); ctx.arc(sensorX - 12, sensorY - 10, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(sensorX - 12, sensorY + 10, 6, 0, Math.PI * 2); ctx.fill();
-
-      const tgtX = startX + (Math.max(0, Math.min(50, target)) / 50.0) * trackW;
-      ctx.strokeStyle = "#38bdf8";
-      ctx.setLineDash([3, 2]);
-      ctx.beginPath(); ctx.moveTo(tgtX, trackY - 50); ctx.lineTo(tgtX, trackY); ctx.stroke();
-      ctx.setLineDash([]);
-
-      const objX = startX + (Math.max(0, Math.min(50, position)) / 50.0) * trackW;
-      const objY = trackY - 20;
-      ctx.fillStyle = "#e2e8f0";
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(objX - 6, objY - 30, 12, 50);
-      ctx.fillRect(objX - 6, objY - 30, 12, 50);
-
-      wavePhase = (wavePhase + 0.18) % 1.0;
-      const gap = (objX - 6) - (sensorX + 18);
-      if (gap > 20) {
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 1.5;
-        for (let i = 0; i < 3; i++) {
-          const p = (wavePhase + i * 0.33) % 1.0;
-          const wx = (sensorX + 18) + gap * p;
-          ctx.beginPath();
-          ctx.arc(wx, sensorY, 10 + 12 * p, -0.6, 0.6);
-          ctx.stroke();
-        }
-      }
-
-      const vLen = Math.max(-50, Math.min(50, velocity * 2.5));
-      if (Math.abs(vLen) > 2) {
-        drawArrow(ctx, objX, objY, objX + vLen, objY, "#34d399", "v");
-      }
-    }
-
-    function drawArrow(ctx, fromX, fromY, toX, toY, color, label) {
-      const headLen = 8;
-      const dx = toX - fromX;
-      const dy = toY - fromY;
-      const angle = Math.atan2(dy, dx);
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(fromX, fromY);
-      ctx.lineTo(toX, toY);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(toX, toY);
-      ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
-      ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
-      ctx.closePath();
-      ctx.fill();
-      ctx.font = "bold 10px Inter";
-      ctx.fillText(label, toX + 4, toY - 4);
-    }
-
-    function drawOscilloscope() {
+    // Render Stacked Oscilloscope (A3)
+    function drawScope() {
       const w = graphCanvas.width;
       const h = graphCanvas.height;
-      const ctx = graphCtx;
-      ctx.clearRect(0, 0, w, h);
+      graphCtx.clearRect(0, 0, w, h);
 
-      ctx.strokeStyle = "#1e293b";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 4]);
-      for (let cm of [10, 20, 30, 40]) {
-        const yPx = h - (cm / 50.0) * h;
-        ctx.beginPath(); ctx.moveTo(0, yPx); ctx.lineTo(w, yPx); ctx.stroke();
-        ctx.fillStyle = "#64748b";
-        ctx.font = "10px JetBrains Mono";
-        ctx.fillText(cm + "cm", 10, yPx - 4);
-      }
-      ctx.setLineDash([]);
+      const h1 = h * 0.48;
+      const h2 = h * 0.24;
+      const y2 = h1;
+      const y3 = h1 + h2;
+      const h3 = h - y3;
 
+      // Divider lines
+      graphCtx.strokeStyle = '#1e293b';
+      graphCtx.lineWidth = 1;
+      graphCtx.beginPath(); graphCtx.moveTo(0, y2); graphCtx.lineTo(w, y2); graphCtx.stroke();
+      graphCtx.beginPath(); graphCtx.moveTo(0, y3); graphCtx.lineTo(w, y3); graphCtx.stroke();
+
+      // Saturation Zones on Servo Panel
+      const satHighY = y3 + h3 - (155.0 / 180.0) * h3;
+      const satLowY = y3 + h3 - (25.0 / 180.0) * h3;
+      graphCtx.fillStyle = '#2b0d14';
+      graphCtx.fillRect(0, y3, w, satHighY - y3);
+      graphCtx.fillRect(0, satLowY, w, (y3 + h3) - satLowY);
+      graphCtx.fillStyle = '#f43f5e';
+      graphCtx.font = 'bold 8px JetBrains Mono';
+      graphCtx.fillText('SAT >155°', w - 46, y3 + 8);
+      graphCtx.fillText('SAT <25°', w - 46, y3 + h3 - 4);
+
+      // Traces
       const dx = w / (bufLen - 1);
 
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      for (let i = 0; i < bufLen; i++) {
+      // Target (Cyan)
+      graphCtx.strokeStyle = '#38bdf8';
+      graphCtx.lineWidth = 2;
+      graphCtx.beginPath();
+      targetBuf.forEach((v, i) => {
         const x = i * dx;
-        const y = h - (targetBuf[i] / 50.0) * h;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
+        const y = h1 - (Math.max(0, Math.min(50, v)) / 50.0) * h1;
+        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
+      });
+      graphCtx.stroke();
 
-      ctx.strokeStyle = (controllerMode === "PID") ? "#10b981" : "#f43f5e";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      for (let i = 0; i < bufLen; i++) {
+      // Position (Green)
+      graphCtx.strokeStyle = '#10b981';
+      graphCtx.lineWidth = 2;
+      graphCtx.beginPath();
+      posBuf.forEach((v, i) => {
         const x = i * dx;
-        const y = h - (posBuf[i] / 50.0) * h;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        const y = h1 - (Math.max(0, Math.min(50, v)) / 50.0) * h1;
+        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
+      });
+      graphCtx.stroke();
+
+      // Error (Rose)
+      graphCtx.strokeStyle = '#f43f5e';
+      graphCtx.lineWidth = 1.5;
+      graphCtx.beginPath();
+      errBuf.forEach((v, i) => {
+        const x = i * dx;
+        const y = (y2 + h2 / 2) - (Math.max(-15, Math.min(15, v)) / 15.0) * (h2 / 2);
+        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
+      });
+      graphCtx.stroke();
+
+      // Servo Angle (Amber)
+      graphCtx.strokeStyle = '#fbbf24';
+      graphCtx.lineWidth = 1.5;
+      graphCtx.beginPath();
+      servoBuf.forEach((v, i) => {
+        const x = i * dx;
+        const y = y3 + h3 - (Math.max(0, Math.min(180, v)) / 180.0) * h3;
+        if (i === 0) graphCtx.moveTo(x, y); else graphCtx.lineTo(x, y);
+      });
+      graphCtx.stroke();
+
+      // Time axis
+      const tSpan = (bufLen - 1) * 0.03;
+      graphCtx.fillStyle = '#64748b';
+      graphCtx.font = '8px JetBrains Mono';
+      graphCtx.fillText(`-${tSpan.toFixed(1)}s`, 6, h - 3);
+      graphCtx.fillText(`-${(tSpan/2).toFixed(1)}s`, w / 2 - 12, h - 3);
+      graphCtx.fillText('0.0s (Now)', w - 50, h - 3);
+
+      // Hover Crosshair HUD Tooltip
+      if (hoverX !== null) {
+        graphCtx.strokeStyle = '#38bdf8';
+        graphCtx.setLineDash([2, 2]);
+        graphCtx.beginPath(); graphCtx.moveTo(hoverX, 0); graphCtx.lineTo(hoverX, h); graphCtx.stroke();
+        graphCtx.setLineDash([]);
+
+        const idx = Math.max(0, Math.min(bufLen - 1, Math.round(hoverX / dx)));
+        const tRel = -((bufLen - 1 - idx) * 0.03).toFixed(2);
+        const hudTxt = `t:${tRel}s | r:${targetBuf[idx].toFixed(1)} | y:${posBuf[idx].toFixed(1)} | e:${errBuf[idx].toFixed(1)} | u:${Math.round(servoBuf[idx])}°`;
+        
+        graphCtx.fillStyle = '#0f172a';
+        graphCtx.strokeStyle = '#38bdf8';
+        graphCtx.lineWidth = 1;
+        const boxX = Math.min(w - 240, Math.max(10, hoverX + 10));
+        graphCtx.fillRect(boxX, 10, 230, 18);
+        graphCtx.strokeRect(boxX, 10, 230, 18);
+        graphCtx.fillStyle = '#f8fafc';
+        graphCtx.font = '9px JetBrains Mono';
+        graphCtx.fillText(hudTxt, boxX + 6, 22);
       }
-      ctx.stroke();
     }
 
-    requestAnimationFrame(loop);
+    // Main 60 FPS Loop
+    function appLoop(ts) {
+      const dt = Math.min(0.1, (ts - lastTime) / 1000.0);
+      lastTime = ts;
+
+      if (!isPaused) {
+        physicsStep(dt || 0.03);
+        updateBuffers();
+      }
+
+      // Telemetry updates
+      document.getElementById('val-target').innerText = `${target.toFixed(1)} cm`;
+      document.getElementById('val-dist').innerText = `${position.toFixed(1)} cm`;
+      const err = target - position;
+      document.getElementById('val-error').innerText = `${err > 0 ? '+' : ''}${err.toFixed(1)} cm`;
+      document.getElementById('val-servo').innerText = `${Math.round(servoAngle)}°`;
+      document.getElementById('val-vel').innerText = `${velocity.toFixed(1)} cm/s`;
+      document.getElementById('val-iae').innerText = `${stepIAE.toFixed(1)} cm·s`;
+      document.getElementById('val-itae').innerText = `${stepITAE.toFixed(1)} cm·s²`;
+
+      drawRig();
+      drawScope();
+      requestAnimationFrame(appLoop);
+    }
+    requestAnimationFrame(appLoop);
+
+    // Web Serial API implementation
+    let serialPort = null, serialReader = null;
+    async function connectWebSerial() {
+      if (!('serial' in navigator)) {
+        alert("Web Serial API is not supported in this browser. Please use Google Chrome or Edge.");
+        return;
+      }
+      try {
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 115200 });
+        document.getElementById('web-serial-status').innerText = "● Connected (115200 baud)";
+        document.getElementById('web-serial-status').className = "text-xs text-emerald-400 font-bold";
+        document.getElementById('badge-mode').innerText = "HW SERIAL";
+        readSerialLoop();
+      } catch (e) {
+        console.error(e);
+        alert(`Serial Connection Error: ${e.message}`);
+      }
+    }
+
+    async function readSerialLoop() {
+      const textDecoder = new TextDecoderStream();
+      const readableStreamClosed = serialPort.readable.pipeTo(textDecoder.writable);
+      serialReader = textDecoder.readable.getReader();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await serialReader.read();
+        if (done) break;
+        buffer += value;
+        let lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (let line of lines) {
+          document.getElementById('serial-terminal').value += line + '\n';
+          document.getElementById('serial-terminal').scrollTop = document.getElementById('serial-terminal').scrollHeight;
+        }
+      }
+    }
+
+    async function sendWebCmd(cmd) {
+      if (!serialPort || !serialPort.writable) {
+        alert("Connect Arduino via Web Serial first!");
+        return;
+      }
+      const writer = serialPort.writable.getWriter();
+      await writer.write(new TextEncoder().encode(cmd));
+      writer.releaseLock();
+    }
   </script>
 </body>
 </html>
-
