@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PID Ultrasonic Tracking & Balancing - Interactive Visual Bench</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 flex flex-col items-center">
+
+  <!-- Header -->
+  <header class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap items-center justify-between shadow-xl">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
+        <h1 class="text-lg font-bold text-cyan-400 tracking-wide">PID ULTRASONIC DYNAMIC TRACKING BENCH</h1>
+      </div>
+      <p class="text-xs text-slate-400 mt-1">Closed-Loop Embedded Control • HC-SR04 Transducer • SG90 Servo • 16x2 LCD Telemetry</p>
+    </div>
+    <div class="flex items-center gap-2 mt-2 sm:mt-0">
+      <button id="btn-rig" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">Rig: ⚖️ Ball-on-Beam</button>
+      <button id="btn-mode" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition">Controller: PID</button>
+      <button id="btn-traj" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">Trajectory: Step</button>
+    </div>
+  </header>
+
+  <!-- Telemetry Badges -->
+  <section class="w-full max-w-5xl grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 mb-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target (r)</div>
+      <div id="val-target" class="mono text-base font-bold text-cyan-400 mt-0.5">20.0 cm</div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Measured (y)</div>
+      <div id="val-dist" class="mono text-base font-bold text-emerald-400 mt-0.5">20.0 cm</div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Error (e)</div>
+      <div id="val-error" class="mono text-base font-bold text-rose-400 mt-0.5">0.0 cm</div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Servo (θ)</div>
+      <div id="val-servo" class="mono text-base font-bold text-amber-400 mt-0.5">90°</div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Velocity (v)</div>
+      <div id="val-vel" class="mono text-base font-bold text-teal-400 mt-0.5">0.0 cm/s</div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 shadow">
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Error Cost (IAE)</div>
+      <div id="val-iae" class="mono text-base font-bold text-purple-400 mt-0.5">0.0</div>
+    </div>
+  </section>
+
+  <!-- Interactive 60fps Canvas: Mechanical Hardware & Physics Vectors -->
+  <main class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl mb-4">
+    <div class="px-4 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs">
+      <span class="font-bold text-cyan-400">PHYSICAL HARDWARE VIEWPORT & VECTOR FIELD</span>
+      <div class="flex items-center gap-3 text-[11px]">
+        <span class="flex items-center gap-1 text-emerald-400 font-semibold"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Velocity (v)</span>
+        <span class="flex items-center gap-1 text-amber-400 font-semibold"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Gravity (a)</span>
+        <span class="flex items-center gap-1 text-cyan-400 font-semibold"><span class="w-2 h-2 rounded-full bg-cyan-400"></span> PID Thrust (F)</span>
+      </div>
+    </div>
+    <canvas id="animCanvas" width="960" height="220" class="w-full bg-[#070a12] block cursor-pointer"></canvas>
+  </main>
+
+  <!-- Real-Time Telemetry Graph Canvas -->
+  <section class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl mb-4">
+    <div class="px-4 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs">
+      <span class="font-bold text-emerald-400">TIME-DOMAIN STEP RESPONSE OSCILLOSCOPE</span>
+      <div class="flex items-center gap-3 text-[11px]">
+        <span class="text-cyan-400 font-bold">■ Target Setpoint r(t)</span>
+        <span class="text-emerald-400 font-bold">■ Sensor Echo y(t)</span>
+      </div>
+    </div>
+    <canvas id="graphCanvas" width="960" height="130" class="w-full bg-[#05070e] block"></canvas>
+  </section>
+
+  <!-- Control & Live Tuning Desk -->
+  <footer class="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div>
+        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+          <span>Proportional (Kp):</span>
+          <span id="txt-kp" class="mono text-cyan-400 font-bold">2.40</span>
+        </div>
+        <input type="range" id="sl-kp" min="0" max="8" step="0.1" value="2.4" class="w-full accent-cyan-400 cursor-pointer" />
+      </div>
+      <div>
+        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+          <span>Integral (Ki):</span>
+          <span id="txt-ki" class="mono text-emerald-400 font-bold">0.04</span>
+        </div>
+        <input type="range" id="sl-ki" min="0" max="0.2" step="0.01" value="0.04" class="w-full accent-emerald-400 cursor-pointer" />
+      </div>
+      <div>
+        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+          <span>Derivative (Kd):</span>
+          <span id="txt-kd" class="mono text-amber-400 font-bold">0.90</span>
+        </div>
+        <input type="range" id="sl-kd" min="0" max="2.5" step="0.05" value="0.9" class="w-full accent-amber-400 cursor-pointer" />
+      </div>
+      <div>
+        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+          <span>Target Distance (cm):</span>
+          <span id="txt-target" class="mono text-purple-400 font-bold">20.0</span>
+        </div>
+        <input type="range" id="sl-target" min="5" max="45" step="1" value="20" class="w-full accent-purple-400 cursor-pointer" />
+      </div>
+    </div>
+
+    <!-- Quick Action Buttons -->
+    <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-400 font-semibold">Quick Set:</span>
+        <button onclick="setTarget(15)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-400">15 cm</button>
+        <button onclick="setTarget(20)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-400">20 cm</button>
+        <button onclick="setTarget(30)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-400">30 cm</button>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="applyNudge()" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow">⚡ Nudge Object (+10 cm)</button>
+        <button onclick="toggleTrajectory()" class="px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold transition shadow">🌊 Sine Wave Test</button>
+        <button onclick="resetMetrics()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">Reset IAE</button>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    let rigType = "beam";
+    let controllerMode = "PID";
+    let trajMode = "step";
+    let position = 20.0;
+    let velocity = 0.0;
+    let acceleration = 0.0;
+    let target = 20.0;
+    let beamAngle = 0.0;
+    let ballRotation = 0.0;
+    let iae = 0.0;
+    let trajTime = 0.0;
+
+    let kp = 2.4, ki = 0.04, kd = 0.90;
+    let integral = 0.0, prevError = 0.0, filteredDeriv = 0.0;
+    let servoAngle = 90.0;
+    let controlOutput = 0.0;
+    let wavePhase = 0.0;
+
+    const bufLen = 140;
+    const targetBuf = new Array(bufLen).fill(20.0);
+    const posBuf = new Array(bufLen).fill(20.0);
+
+    const animCanvas = document.getElementById("animCanvas");
+    const animCtx = animCanvas.getContext("2d");
+    const graphCanvas = document.getElementById("graphCanvas");
+    const graphCtx = graphCanvas.getContext("2d");
+
+    document.getElementById("btn-rig").onclick = () => {
+      rigType = (rigType === "beam") ? "tracker" : "beam";
+      document.getElementById("btn-rig").innerText = (rigType === "beam") ? "Rig: ⚖️ Ball-on-Beam" : "Rig: 🎯 1-DOF Tracker";
+    };
+    document.getElementById("btn-mode").onclick = () => {
+      controllerMode = (controllerMode === "PID") ? "ON_OFF" : "PID";
+      document.getElementById("btn-mode").innerText = "Controller: " + controllerMode;
+      document.getElementById("btn-mode").className = (controllerMode === "PID")
+        ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 text-white"
+        : "px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white";
+    };
+    document.getElementById("btn-traj").onclick = toggleTrajectory;
+
+    function toggleTrajectory() {
+      trajMode = (trajMode === "step") ? "sine" : "step";
+      document.getElementById("btn-traj").innerText = "Trajectory: " + (trajMode === "step" ? "Step" : "🌊 Sine Wave");
+    }
+
+    function setTarget(v) {
+      trajMode = "step";
+      document.getElementById("btn-traj").innerText = "Trajectory: Step";
+      target = v;
+      document.getElementById("sl-target").value = v;
+      document.getElementById("txt-target").innerText = v.toFixed(1);
+    }
+
+    function applyNudge() {
+      position = Math.min(46.0, position + 10.0);
+      velocity += 14.0;
+    }
+
+    function resetMetrics() {
+      iae = 0.0;
+    }
+
+    document.getElementById("sl-kp").oninput = (e) => { kp = parseFloat(e.target.value); document.getElementById("txt-kp").innerText = kp.toFixed(2); };
+    document.getElementById("sl-ki").oninput = (e) => { ki = parseFloat(e.target.value); document.getElementById("txt-ki").innerText = ki.toFixed(2); };
+    document.getElementById("sl-kd").oninput = (e) => { kd = parseFloat(e.target.value); document.getElementById("txt-kd").innerText = kd.toFixed(2); };
+    document.getElementById("sl-target").oninput = (e) => {
+      trajMode = "step";
+      document.getElementById("btn-traj").innerText = "Trajectory: Step";
+      target = parseFloat(e.target.value);
+      document.getElementById("txt-target").innerText = target.toFixed(1);
+    };
+
+    let lastTime = performance.now();
+    function loop(now) {
+      let dt = (now - lastTime) / 1000.0;
+      lastTime = now;
+      if (dt > 0.1) dt = 0.03;
+
+      trajTime += dt;
+      if (trajMode === "sine") {
+        target = 22.0 + 10.0 * Math.sin(2.0 * Math.PI * 0.22 * trajTime);
+        document.getElementById("sl-target").value = target;
+        document.getElementById("txt-target").innerText = target.toFixed(1);
+      }
+
+      const noise = (Math.random() - 0.5) * 0.3;
+      const rawDist = Math.max(2.0, Math.min(50.0, position + noise));
+      const smoothedDist = (0.3 * rawDist) + (0.7 * position);
+      const error = target - smoothedDist;
+      iae += Math.abs(error) * dt;
+
+      if (controllerMode === "ON_OFF") {
+        if (error > 0.8) controlOutput = 30.0;
+        else if (error < -0.8) controlOutput = -30.0;
+        else controlOutput = 0.0;
+        servoAngle = 90.0 + controlOutput;
+      } else {
+        const ctrlError = Math.abs(error) < 0.5 ? 0.0 : error;
+        const P = kp * ctrlError;
+        integral += ctrlError * dt;
+        integral = Math.max(-35.0, Math.min(35.0, integral));
+        const I = ki * integral;
+        const rawD = dt > 0 ? (ctrlError - prevError) / dt : 0.0;
+        filteredDeriv = (0.2 * rawD) + (0.8 * filteredDeriv);
+        const D = kd * filteredDeriv;
+        prevError = ctrlError;
+        controlOutput = P + I + D;
+        servoAngle = Math.max(25.0, Math.min(155.0, 90.0 + controlOutput));
+      }
+
+      if (rigType === "beam") {
+        beamAngle = (servoAngle - 90.0) * 0.35;
+        const thetaRad = beamAngle * Math.PI / 180.0;
+        acceleration = (5.0 / 7.0) * 980.0 * Math.sin(thetaRad) - (2.2 * velocity);
+        velocity += acceleration * dt;
+        position += velocity * dt;
+        ballRotation = (ballRotation + (velocity * dt / 0.15)) % 360.0;
+      } else {
+        const tiltRad = (servoAngle - 90.0) * Math.PI / 180.0;
+        acceleration = (120.0 * Math.sin(tiltRad) - 2.2 * velocity);
+        velocity += acceleration * dt;
+        position += velocity * dt;
+      }
+
+      if (position <= 3.5) { position = 3.5; velocity = -0.3 * velocity; }
+      else if (position >= 47.5) { position = 47.5; velocity = -0.3 * velocity; }
+
+      targetBuf.shift(); targetBuf.push(target);
+      posBuf.shift(); posBuf.push(position);
+
+      document.getElementById("val-target").innerText = target.toFixed(1) + " cm";
+      document.getElementById("val-dist").innerText = position.toFixed(1) + " cm";
+      const sign = error > 0 ? "+" : "";
+      document.getElementById("val-error").innerText = sign + error.toFixed(1) + " cm";
+      document.getElementById("val-servo").innerText = Math.round(servoAngle) + "°";
+      document.getElementById("val-vel").innerText = velocity.toFixed(1) + " cm/s";
+      document.getElementById("val-iae").innerText = iae.toFixed(1);
+
+      drawRig();
+      drawOscilloscope();
+      requestAnimationFrame(loop);
+    }
+
+    function drawRig() {
+      const w = animCanvas.width;
+      const h = animCanvas.height;
+      const ctx = animCtx;
+      ctx.clearRect(0, 0, w, h);
+
+      if (rigType === "beam") {
+        drawBallAndBeam(ctx, w, h);
+      } else {
+        drawLinearTracker(ctx, w, h);
+      }
+    }
+
+    function drawBallAndBeam(ctx, w, h) {
+      const pivotX = w / 2 - 40;
+      const pivotY = h - 55;
+      const beamLen = w - 240;
+
+      ctx.fillStyle = "#1e293b";
+      ctx.strokeStyle = "#475569";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pivotX - 22, pivotY + 36);
+      ctx.lineTo(pivotX + 22, pivotY + 36);
+      ctx.lineTo(pivotX, pivotY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.beginPath();
+      ctx.arc(pivotX, pivotY, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      const angRad = beamAngle * Math.PI / 180.0;
+      const halfLen = beamLen / 2.0;
+      const x1 = pivotX - halfLen * Math.cos(angRad);
+      const y1 = pivotY + halfLen * Math.sin(angRad);
+      const x2 = pivotX + halfLen * Math.cos(angRad);
+      const y2 = pivotY - halfLen * Math.sin(angRad);
+
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+      ctx.fillStyle = "#0284c7";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x1 - 12, y1 - 18, 24, 36);
+      ctx.fillRect(x1 - 12, y1 - 18, 24, 36);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.beginPath(); ctx.arc(x1 + 8, y1 - 8, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x1 + 8, y1 + 8, 6, 0, Math.PI * 2); ctx.fill();
+
+      const posFrac = (position - 3.5) / 44.0;
+      const ballX = x1 + posFrac * (x2 - x1);
+      const ballY = y1 + posFrac * (y2 - y1) - 12;
+
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.beginPath();
+      ctx.ellipse(ballX, ballY + 12, 10, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const grad = ctx.createRadialGradient(ballX - 3, ballY - 4, 1, ballX, ballY, 11);
+      grad.addColorStop(0, "#fde68a");
+      grad.addColorStop(0.5, "#f59e0b");
+      grad.addColorStop(1, "#b45309");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, 11, 0, Math.PI * 2);
+      ctx.fill();
+
+      const rotRad = ballRotation * Math.PI / 180.0;
+      const dx = 8 * Math.cos(rotRad);
+      const dy = 8 * Math.sin(rotRad);
+      ctx.strokeStyle = "#78350f";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(ballX - dx, ballY - dy); ctx.lineTo(ballX + dx, ballY + dy);
+      ctx.moveTo(ballX + dy, ballY - dx); ctx.lineTo(ballX - dy, ballY + dx);
+      ctx.stroke();
+
+      const tgtFrac = (target - 3.5) / 44.0;
+      const tx = x1 + tgtFrac * (x2 - x1);
+      const ty = y1 + tgtFrac * (y2 - y1);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath(); ctx.moveTo(tx, ty - 32); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath(); ctx.moveTo(tx, ty - 32); ctx.lineTo(tx + 12, ty - 26); ctx.lineTo(tx, ty - 20); ctx.closePath(); ctx.fill();
+
+      wavePhase = (wavePhase + 0.18) % 1.0;
+      const span = ballX - x1;
+      if (span > 25) {
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 3; i++) {
+          const p = (wavePhase + i * 0.33) % 1.0;
+          const wx = x1 + span * p;
+          const wy = y1 + (ballY - y1) * p;
+          ctx.beginPath();
+          ctx.arc(wx, wy, 10 + 12 * p, -0.6, 0.6);
+          ctx.stroke();
+        }
+      }
+
+      const vLen = Math.max(-45, Math.min(45, velocity * 2.2));
+      if (Math.abs(vLen) > 2) {
+        drawArrow(ctx, ballX, ballY, ballX + vLen * Math.cos(angRad), ballY - vLen * Math.sin(angRad), "#34d399", "v");
+      }
+      const fLen = Math.max(-45, Math.min(45, controlOutput * 1.5));
+      if (Math.abs(fLen) > 2) {
+        drawArrow(ctx, ballX, ballY - 12, ballX - fLen * Math.cos(angRad), ballY - 12 + fLen * Math.sin(angRad), "#00f2fe", "F_pid");
+      }
+
+      const servoX = w - 85;
+      const servoY = h - 50;
+      ctx.fillStyle = "#0284c7";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(servoX - 22, servoY - 20, 44, 40);
+      ctx.fillRect(servoX - 22, servoY - 20, 44, 40);
+
+      const hornRad = (servoAngle - 180.0) * Math.PI / 180.0;
+      const hx = servoX + 24 * Math.cos(hornRad);
+      const hy = servoY + 24 * Math.sin(hornRad);
+      ctx.strokeStyle = "#fbbf24";
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(servoX, servoY); ctx.lineTo(hx, hy); ctx.stroke();
+
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function drawLinearTracker(ctx, w, h) {
+      const trackY = h - 45;
+      const startX = 90;
+      const endX = w - 180;
+      const trackW = endX - startX;
+
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(startX - 10, trackY); ctx.lineTo(endX + 10, trackY); ctx.stroke();
+
+      const sensorX = startX - 45;
+      const sensorY = trackY - 25;
+      ctx.fillStyle = "#0284c7";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sensorX - 18, sensorY - 22, 36, 44);
+      ctx.fillRect(sensorX - 18, sensorY - 22, 36, 44);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.beginPath(); ctx.arc(sensorX - 12, sensorY - 10, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sensorX - 12, sensorY + 10, 6, 0, Math.PI * 2); ctx.fill();
+
+      const tgtX = startX + (Math.max(0, Math.min(50, target)) / 50.0) * trackW;
+      ctx.strokeStyle = "#38bdf8";
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath(); ctx.moveTo(tgtX, trackY - 50); ctx.lineTo(tgtX, trackY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      const objX = startX + (Math.max(0, Math.min(50, position)) / 50.0) * trackW;
+      const objY = trackY - 20;
+      ctx.fillStyle = "#e2e8f0";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(objX - 6, objY - 30, 12, 50);
+      ctx.fillRect(objX - 6, objY - 30, 12, 50);
+
+      wavePhase = (wavePhase + 0.18) % 1.0;
+      const gap = (objX - 6) - (sensorX + 18);
+      if (gap > 20) {
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 3; i++) {
+          const p = (wavePhase + i * 0.33) % 1.0;
+          const wx = (sensorX + 18) + gap * p;
+          ctx.beginPath();
+          ctx.arc(wx, sensorY, 10 + 12 * p, -0.6, 0.6);
+          ctx.stroke();
+        }
+      }
+
+      const vLen = Math.max(-50, Math.min(50, velocity * 2.5));
+      if (Math.abs(vLen) > 2) {
+        drawArrow(ctx, objX, objY, objX + vLen, objY, "#34d399", "v");
+      }
+    }
+
+    function drawArrow(ctx, fromX, fromY, toX, toY, color, label) {
+      const headLen = 8;
+      const dx = toX - fromX;
+      const dy = toY - fromY;
+      const angle = Math.atan2(dy, dx);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(fromX, fromY);
+      ctx.lineTo(toX, toY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(toX, toY);
+      ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+      ctx.font = "bold 10px Inter";
+      ctx.fillText(label, toX + 4, toY - 4);
+    }
+
+    function drawOscilloscope() {
+      const w = graphCanvas.width;
+      const h = graphCanvas.height;
+      const ctx = graphCtx;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      for (let cm of [10, 20, 30, 40]) {
+        const yPx = h - (cm / 50.0) * h;
+        ctx.beginPath(); ctx.moveTo(0, yPx); ctx.lineTo(w, yPx); ctx.stroke();
+        ctx.fillStyle = "#64748b";
+        ctx.font = "10px JetBrains Mono";
+        ctx.fillText(cm + "cm", 10, yPx - 4);
+      }
+      ctx.setLineDash([]);
+
+      const dx = w / (bufLen - 1);
+
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < bufLen; i++) {
+        const x = i * dx;
+        const y = h - (targetBuf[i] / 50.0) * h;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = (controllerMode === "PID") ? "#10b981" : "#f43f5e";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < bufLen; i++) {
+        const x = i * dx;
+        const y = h - (posBuf[i] / 50.0) * h;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
