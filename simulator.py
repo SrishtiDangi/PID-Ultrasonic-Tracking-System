@@ -25,10 +25,10 @@ class VisualPIDSimulatorApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("PID ULTRASONIC DYNAMIC TRACKING BENCH")
-        # Compact height (620px) to guarantee it fits above Windows taskbar on any screen scaling!
-        self.geometry("980x620")
+        # Compact height to fit all laptop screens comfortably
+        self.geometry("980x640")
         self.configure(bg="#090d16")
-        self.minsize(900, 580)
+        self.minsize(920, 600)
 
         # Operational States
         self.mode = "sim"
@@ -39,22 +39,31 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.is_hw_connected = False
         self.ser = None
 
-        # Start with an initial offset so motion & vectors are visibly active immediately!
+        # Playback & Timing Controls (A3)
+        self.is_paused = False
+        self.speed_multiplier = 1.0           # 0.1x to 2.0x
+        self.hover_x = None
+        self.hover_y = None
+
+        # Plant / Physical State
         self.position = 12.0                  # cm
         self.velocity = 0.0                  # cm/s
         self.acceleration = 0.0              # cm/s^2
         self.target = 22.0                    # cm
+        self.prev_step_target = 22.0
         self.beam_angle = 0.0                # degrees (-22° to +22°)
         self.ball_rotation = 0.0             # degrees
         self.plant_mass = 1.0                # kg
         self.plant_damping = 2.0             # N*s/cm
         self.noise_amp = 0.20                # cm
 
-        # Trajectory Generator State
+        # Trajectory Generator & Metrics State (A8)
         self.traj_time = 0.0
         self.sine_freq = 0.20                 # Hz
         self.sine_amp = 8.0                   # cm
-        self.iae = 0.0
+        self.step_start_time = time.time()
+        self.step_iae = 0.0                   # Integral of Absolute Error (cm*s)
+        self.step_itae = 0.0                  # Integral of Time-weighted Absolute Error (cm*s^2)
 
         # PID Controller Parameters
         self.kp = 2.40
@@ -69,16 +78,19 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.control_output = 0.0
         self.servo_angle = 90.0
 
-        # Oscilloscope Buffers (140 samples)
+        # Oscilloscope Buffers (A3: Stacked r, y, error, servo, time)
         self.buf_len = 140
         self.target_buf = [22.0] * self.buf_len
         self.pos_buf = [12.0] * self.buf_len
+        self.err_buf = [10.0] * self.buf_len
+        self.servo_buf = [90.0] * self.buf_len
 
         # Visual Loop Variables
         self.last_time = time.time()
         self.wave_phase = 0.0
 
         self.build_ui()
+        self.bind_shortcuts()
         self.run_loop()
 
     def build_ui(self):
@@ -114,7 +126,7 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.btn_hw = tk.Button(controls_box, text="USB", command=self.toggle_serial, bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 8, "bold"), relief="flat", padx=6, pady=2, cursor="hand2")
         self.btn_hw.pack(side=tk.LEFT, padx=2)
 
-        # 2. STATUS TILES ROW (Compact)
+        # 2. STATUS TILES ROW (Compact - A8: with Units & Step ITAE)
         tiles_frame = tk.Frame(self, bg="#090d16", padx=10, pady=2)
         tiles_frame.pack(fill=tk.X)
 
@@ -123,13 +135,14 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.lbl_error = self.make_badge(tiles_frame, "ERROR (e)", "+10.0 cm", "#f43f5e", 2)
         self.lbl_servo = self.make_badge(tiles_frame, "SERVO (θ)", "90°", "#fbbf24", 3)
         self.lbl_vel = self.make_badge(tiles_frame, "VELOCITY (v)", "0.0 cm/s", "#2dd4bf", 4)
-        self.lbl_iae = self.make_badge(tiles_frame, "ERROR (IAE)", "0.0", "#c084fc", 5)
+        self.lbl_iae = self.make_badge(tiles_frame, "IAE (cm·s)", "0.0 cm·s", "#c084fc", 5)
+        self.lbl_itae = self.make_badge(tiles_frame, "ITAE (cm·s²)", "0.0 cm·s²", "#a78bfa", 6)
 
         # 3. CENTER DISPLAY: HARDWARE RIG (TOP) + OSCILLOSCOPE (BOTTOM)
         center_frame = tk.Frame(self, bg="#090d16", padx=10)
         center_frame.pack(fill=tk.BOTH, expand=True)
 
-        # 3A. Physical Viewport (Compact: 155px height)
+        # 3A. Physical Viewport (Compact: 150px height)
         anim_box = tk.Frame(center_frame, bg="#131c2e", highlightthickness=1, highlightbackground="#1e293b")
         anim_box.pack(fill=tk.X, pady=2)
 
@@ -144,24 +157,45 @@ class VisualPIDSimulatorApp(tk.Tk):
         tk.Label(v_leg, text="→ Gravity (a)", fg="#fbbf24", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=5)
         tk.Label(v_leg, text="→ PID Thrust (F)", fg="#00f2fe", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=5)
 
-        self.anim_canvas = tk.Canvas(anim_box, height=155, bg="#060911", highlightthickness=0)
+        self.anim_canvas = tk.Canvas(anim_box, height=150, bg="#060911", highlightthickness=0)
         self.anim_canvas.pack(fill=tk.X, expand=True)
 
-        # 3B. Oscilloscope (Compact: 105px height)
+        # 3B. Stacked Oscilloscope (A3: r/y, error, servo saturation, pause/step, hover)
         graph_box = tk.Frame(center_frame, bg="#131c2e", highlightthickness=1, highlightbackground="#1e293b")
         graph_box.pack(fill=tk.BOTH, expand=True, pady=2)
 
-        graph_hdr = tk.Frame(graph_box, bg="#131c2e", padx=8, pady=2)
+        graph_hdr = tk.Frame(graph_box, bg="#131c2e", padx=6, pady=2)
         graph_hdr.pack(fill=tk.X)
-        tk.Label(graph_hdr, text="TIME-DOMAIN STEP & SINE RESPONSE (OSCILLOSCOPE)", fg="#10b981", bg="#131c2e", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
-        tk.Label(graph_hdr, text="■ Target r(t)", fg="#38bdf8", bg="#131c2e", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=10)
-        tk.Label(graph_hdr, text="■ Measured y(t)", fg="#10b981", bg="#131c2e", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
+        tk.Label(graph_hdr, text="STACKED OSCILLOSCOPE", fg="#10b981", bg="#131c2e", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        tk.Label(graph_hdr, text="■ r", fg="#38bdf8", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(graph_hdr, text="■ y", fg="#10b981", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(graph_hdr, text="■ e", fg="#f43f5e", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(graph_hdr, text="■ u (θ)", fg="#fbbf24", bg="#131c2e", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
 
-        self.status_msg = tk.Label(graph_hdr, text="Active: Dynamic Sine Tracking", fg="#38bdf8", bg="#131c2e", font=("Segoe UI", 8))
-        self.status_msg.pack(side=tk.RIGHT, padx=6)
+        # Interactive Scope Toolbar (A3)
+        scope_tools = tk.Frame(graph_hdr, bg="#131c2e")
+        scope_tools.pack(side=tk.RIGHT)
 
-        self.graph_canvas = tk.Canvas(graph_box, height=105, bg="#04060c", highlightthickness=0)
+        self.btn_pause = tk.Button(scope_tools, text="⏸ Pause", command=self.toggle_pause, bg="#1e293b", fg="white", font=("Segoe UI", 7, "bold"), relief="flat", padx=6, pady=1, cursor="hand2")
+        self.btn_pause.pack(side=tk.LEFT, padx=2)
+
+        self.btn_step = tk.Button(scope_tools, text="⏭ Step", command=self.step_once, bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 7), relief="flat", padx=5, pady=1, cursor="hand2")
+        self.btn_step.pack(side=tk.LEFT, padx=2)
+
+        tk.Label(scope_tools, text="Speed:", fg="#64748b", bg="#131c2e", font=("Segoe UI", 7)).pack(side=tk.LEFT, padx=(3, 1))
+        for spd in [0.2, 0.5, 1.0, 2.0]:
+            tk.Button(scope_tools, text=f"{spd}x", command=lambda s=spd: self.set_speed(s), bg="#1e293b", fg="#38bdf8", font=("Segoe UI", 7), relief="flat", padx=3, pady=1, cursor="hand2").pack(side=tk.LEFT, padx=1)
+
+        self.lbl_zoom = tk.Label(scope_tools, text="1.0x Zoom", fg="#a78bfa", bg="#131c2e", font=("Segoe UI", 7))
+        self.lbl_zoom.pack(side=tk.LEFT, padx=3)
+
+        self.graph_canvas = tk.Canvas(graph_box, height=130, bg="#04060c", highlightthickness=0)
         self.graph_canvas.pack(fill=tk.BOTH, expand=True)
+        self.graph_canvas.bind("<Motion>", self.on_scope_hover)
+        self.graph_canvas.bind("<Leave>", self.on_scope_leave)
+        self.graph_canvas.bind("<MouseWheel>", self.on_scope_scroll)
+        self.graph_canvas.bind("<Button-4>", lambda e: self.zoom_scope(-10))
+        self.graph_canvas.bind("<Button-5>", lambda e: self.zoom_scope(10))
 
         # 4. BOTTOM CONTROLS (Compact & Fully Visible on all screens!)
         ctrl_frame = tk.Frame(self, bg="#131c2e", padx=10, pady=6, highlightthickness=1, highlightbackground="#1e293b")
@@ -268,13 +302,71 @@ class VisualPIDSimulatorApp(tk.Tk):
             except Exception:
                 pass
 
+    def bind_shortcuts(self):
+        self.bind("<space>", lambda e: self.toggle_pause())
+        self.bind("<Key-n>", lambda e: self.apply_nudge())
+        self.bind("<Key-r>", lambda e: self.reset_metrics())
+
+    def toggle_pause(self):
+        self.is_paused = not self.is_paused
+        if self.is_paused:
+            self.btn_pause.config(text="▶ Resume", bg="#0284c7")
+        else:
+            self.btn_pause.config(text="⏸ Pause", bg="#1e293b")
+
+    def step_once(self):
+        if not self.is_paused:
+            self.toggle_pause()
+        self.physics_step(0.03)
+        self.update_buffers()
+        self.draw_mechanical_rig()
+        self.draw_graph()
+
+    def set_speed(self, spd):
+        self.speed_multiplier = float(spd)
+
+    def on_scope_scroll(self, event):
+        if event.delta > 0:
+            self.zoom_scope(-10)
+        else:
+            self.zoom_scope(10)
+
+    def zoom_scope(self, delta):
+        new_len = max(40, min(300, self.buf_len + delta))
+        if new_len != self.buf_len:
+            if new_len > self.buf_len:
+                pad = new_len - self.buf_len
+                self.target_buf = [self.target_buf[0]] * pad + self.target_buf
+                self.pos_buf = [self.pos_buf[0]] * pad + self.pos_buf
+                self.err_buf = [self.err_buf[0]] * pad + self.err_buf
+                self.servo_buf = [self.servo_buf[0]] * pad + self.servo_buf
+            else:
+                cut = self.buf_len - new_len
+                self.target_buf = self.target_buf[cut:]
+                self.pos_buf = self.pos_buf[cut:]
+                self.err_buf = self.err_buf[cut:]
+                self.servo_buf = self.servo_buf[cut:]
+            self.buf_len = new_len
+            self.lbl_zoom.config(text=f"{140/self.buf_len:.1f}x Zoom")
+
+    def on_scope_hover(self, event):
+        self.hover_x = event.x
+        self.hover_y = event.y
+
+    def on_scope_leave(self, event):
+        self.hover_x = None
+        self.hover_y = None
+
     def apply_nudge(self):
         self.position = min(46.0, self.position + 10.0)
         self.velocity += 14.0
-        self.status_msg.config(text="Disturbance Injected (+10 cm)!", fg="#f43f5e")
+        self.reset_metrics()
 
     def reset_metrics(self):
-        self.iae = 0.0
+        self.step_start_time = time.time()
+        self.step_iae = 0.0
+        self.step_itae = 0.0
+        self.prev_step_target = self.target
 
     def refresh_ports(self):
         if SERIAL_AVAILABLE:
@@ -332,18 +424,31 @@ class VisualPIDSimulatorApp(tk.Tk):
         if self.mode == "hw":
             return
 
+        dt = dt * self.speed_multiplier
+
         # Trajectory Generator
         self.traj_time += dt
         if self.trajectory_mode == "sine":
             self.target = 22.0 + self.sine_amp * math.sin(2.0 * math.pi * self.sine_freq * self.traj_time)
             self.s_target.var.set(round(self.target, 1))
 
+        # Check for step setpoint transition (A8)
+        if abs(self.target - self.prev_step_target) > 0.4:
+            self.step_start_time = time.time()
+            self.step_iae = 0.0
+            self.step_itae = 0.0
+            self.prev_step_target = self.target
+
         # Ultrasonic Noise & Filter
         noise = random.gauss(0, self.noise_amp)
         raw_dist = max(2.0, min(50.0, self.position + noise))
         self.smoothed_dist = (self.alpha_dist * raw_dist) + ((1.0 - self.alpha_dist) * self.smoothed_dist)
         error = self.target - self.smoothed_dist
-        self.iae += abs(error) * dt
+
+        # A8 Metrics: Cumulative Step IAE [cm*s] & ITAE [cm*s^2]
+        t_elapsed = max(0.0, time.time() - self.step_start_time)
+        self.step_iae += abs(error) * dt
+        self.step_itae += t_elapsed * abs(error) * dt
 
         # Control Algorithm
         if self.controller_type == "ON_OFF":
@@ -569,6 +674,20 @@ class VisualPIDSimulatorApp(tk.Tk):
         c.create_text(lcd_x - 34, lcd_y - 7, text=f"T:{self.target:.0f} D:{self.smoothed_dist:.1f}", fill="#ffffff", font=("Courier", 7, "bold"), anchor="w")
         c.create_text(lcd_x - 34, lcd_y + 7, text=f"E:{e_sign}{err:.1f} S:{int(self.servo_angle)}", fill="#ffffff", font=("Courier", 7, "bold"), anchor="w")
 
+    def update_buffers(self):
+        self.target_buf.pop(0)
+        self.target_buf.append(self.target)
+
+        self.pos_buf.pop(0)
+        self.pos_buf.append(self.position)
+
+        err = self.target - self.position
+        self.err_buf.pop(0)
+        self.err_buf.append(err)
+
+        self.servo_buf.pop(0)
+        self.servo_buf.append(self.servo_angle)
+
     def draw_graph(self):
         c = self.graph_canvas
         c.delete("all")
@@ -577,33 +696,119 @@ class VisualPIDSimulatorApp(tk.Tk):
         if w < 50 or h < 50:
             return
 
-        y_max = 50.0
+        # Stacked Panels (A3):
+        # Panel 1: Position r(t), y(t) [0 to 50 cm] - Height: 48%
+        h1 = int(h * 0.48)
+        # Panel 2: Error e(t) [-15 to +15 cm] - Height: 24%
+        h2 = int(h * 0.24)
+        y2 = h1
+        # Panel 3: Servo Angle u(t) [0 to 180 deg] - Height: remainder
+        y3 = h1 + h2
+        h3 = h - y3
 
-        for cm in [10, 20, 30, 40]:
-            y_px = h - int((cm / y_max) * h)
-            c.create_line(0, y_px, w, y_px, fill="#1e293b", dash=(2, 4))
-            c.create_text(22, y_px - 6, text=f"{cm}cm", fill="#64748b", font=("Consolas", 7))
+        # Grid and Labels for Panel 1 (Position)
+        c.create_text(6, 3, text="Position r(t), y(t) [cm]", fill="#64748b", font=("Consolas", 7), anchor="nw")
+        for cm in [15, 30, 45]:
+            y_px = h1 - int((cm / 50.0) * h1)
+            c.create_line(0, y_px, w, y_px, fill="#131c2e", dash=(2, 4))
+            c.create_text(w - 6, y_px - 2, text=f"{cm}cm", fill="#475569", font=("Consolas", 6), anchor="e")
+
+        # Divider between Panel 1 & 2
+        c.create_line(0, y2, w, y2, fill="#1e293b", width=1)
+
+        # Panel 2: Error [-15 to +15 cm]
+        c.create_text(6, y2 + 2, text="Error e(t) [±15cm]", fill="#64748b", font=("Consolas", 7), anchor="nw")
+        e_zero_y = y2 + int(h2 / 2)
+        c.create_line(0, e_zero_y, w, e_zero_y, fill="#334155", dash=(2, 2))
+        c.create_text(w - 6, e_zero_y - 2, text="0cm", fill="#475569", font=("Consolas", 6), anchor="e")
+
+        # Divider between Panel 2 & 3
+        c.create_line(0, y3, w, y3, fill="#1e293b", width=1)
+
+        # Panel 3: Servo Angle [0 to 180 deg] with Saturation Shading (A3)
+        c.create_text(6, y3 + 2, text="Servo Effort u(θ) [deg]", fill="#64748b", font=("Consolas", 7), anchor="nw")
+        sat_high_y = y3 + h3 - int((155.0 / 180.0) * h3)
+        sat_low_y = y3 + h3 - int((25.0 / 180.0) * h3)
+
+        # Upper Saturation (>155°)
+        c.create_rectangle(0, y3, w, sat_high_y, fill="#2b0d14", outline="")
+        c.create_line(0, sat_high_y, w, sat_high_y, fill="#f43f5e", dash=(2, 3), width=1)
+        c.create_text(w - 6, y3 + 4, text="SAT >155°", fill="#f43f5e", font=("Consolas", 6, "bold"), anchor="ne")
+
+        # Lower Saturation (<25°)
+        c.create_rectangle(0, sat_low_y, w, y3 + h3, fill="#2b0d14", outline="")
+        c.create_line(0, sat_low_y, w, sat_low_y, fill="#f43f5e", dash=(2, 3), width=1)
+        c.create_text(w - 6, y3 + h3 - 6, text="SAT <25°", fill="#f43f5e", font=("Consolas", 6, "bold"), anchor="se")
+
+        # Neutral 90° reference
+        neutral_y = y3 + h3 - int((90.0 / 180.0) * h3)
+        c.create_line(0, neutral_y, w, neutral_y, fill="#334155", dash=(2, 4))
+        c.create_text(w - 6, neutral_y - 2, text="90°", fill="#475569", font=("Consolas", 6), anchor="e")
 
         dx = w / (self.buf_len - 1)
 
-        # Target (Cyan)
-        target_pts = []
+        # Draw Traces
+        # 1. Target r(t) (Cyan)
+        tgt_pts = []
         for i, val in enumerate(self.target_buf):
             x = i * dx
-            y = h - (val / y_max) * h
-            target_pts.extend([x, max(0, min(h, y))])
-        if len(target_pts) >= 4:
-            c.create_line(*target_pts, fill="#38bdf8", width=2)
+            y = h1 - (max(0.0, min(50.0, val)) / 50.0) * h1
+            tgt_pts.extend([x, y])
+        if len(tgt_pts) >= 4:
+            c.create_line(*tgt_pts, fill="#38bdf8", width=2)
 
-        # Position (Green or Red)
+        # 2. Position y(t) (Emerald / Rose)
         pos_col = "#10b981" if self.controller_type == "PID" else "#f43f5e"
         pos_pts = []
         for i, val in enumerate(self.pos_buf):
             x = i * dx
-            y = h - (val / y_max) * h
-            pos_pts.extend([x, max(0, min(h, y))])
+            y = h1 - (max(0.0, min(50.0, val)) / 50.0) * h1
+            pos_pts.extend([x, y])
         if len(pos_pts) >= 4:
             c.create_line(*pos_pts, fill=pos_col, width=2)
+
+        # 3. Error e(t) (Rose)
+        err_pts = []
+        for i, val in enumerate(self.err_buf):
+            x = i * dx
+            y = e_zero_y - (max(-15.0, min(15.0, val)) / 15.0) * (h2 / 2)
+            err_pts.extend([x, y])
+        if len(err_pts) >= 4:
+            c.create_line(*err_pts, fill="#f43f5e", width=1.5)
+
+        # 4. Servo Angle u(t) (Amber)
+        srv_pts = []
+        for i, val in enumerate(self.servo_buf):
+            x = i * dx
+            y = y3 + h3 - (max(0.0, min(180.0, val)) / 180.0) * h3
+            srv_pts.extend([x, y])
+        if len(srv_pts) >= 4:
+            c.create_line(*srv_pts, fill="#fbbf24", width=1.5)
+
+        # Time Axis in seconds (A3)
+        t_span = (self.buf_len - 1) * 0.03
+        for pct, lbl in [(0.0, f"-{t_span:.1f}s"), (0.5, f"-{0.5*t_span:.1f}s"), (1.0, "0.0s (Now)")]:
+            tx = pct * w
+            anchor = "w" if pct == 0 else ("e" if pct == 1.0 else "center")
+            c.create_text(tx, h - 3, text=lbl, fill="#64748b", font=("Consolas", 6), anchor=anchor)
+
+        # Hover Crosshair & Tooltip HUD (A3)
+        if self.hover_x is not None and 0 <= self.hover_x <= w:
+            c.create_line(self.hover_x, 0, self.hover_x, h, fill="#38bdf8", dash=(2, 2))
+            idx = int(self.hover_x / dx)
+            idx = max(0, min(self.buf_len - 1, idx))
+            t_rel = -(self.buf_len - 1 - idx) * 0.03
+            val_r = self.target_buf[idx]
+            val_y = self.pos_buf[idx]
+            val_e = self.err_buf[idx]
+            val_u = self.servo_buf[idx]
+
+            hud_txt = f"t:{t_rel:+.2f}s | r:{val_r:.1f}cm | y:{val_y:.1f}cm | e:{val_e:+.1f}cm | u:{int(val_u)}°"
+            hud_w = 265
+            hud_x = min(w - hud_w - 6, max(6, self.hover_x + 8))
+            hud_y = max(8, min(h - 22, (self.hover_y or 30) - 10))
+            c.create_rectangle(hud_x, hud_y, hud_x + hud_w, hud_y + 16, fill="#0f172a", outline="#38bdf8", width=1)
+            c.create_text(hud_x + 6, hud_y + 8, text=hud_txt, fill="#f8fafc", font=("Consolas", 7), anchor="w")
 
     def run_loop(self):
         now = time.time()
@@ -613,15 +818,11 @@ class VisualPIDSimulatorApp(tk.Tk):
         if dt > 0.1:
             dt = 0.03
 
-        self.physics_step(dt)
+        if not self.is_paused:
+            self.physics_step(dt)
+            self.update_buffers()
 
-        self.target_buf.pop(0)
-        self.target_buf.append(self.target)
-
-        self.pos_buf.pop(0)
-        self.pos_buf.append(self.position)
-
-        # Telemetry Labels
+        # Telemetry Labels (A8)
         self.lbl_target.config(text=f"{self.target:.1f} cm")
         self.lbl_measured.config(text=f"{self.position:.1f} cm")
         err = self.target - self.position
@@ -629,7 +830,8 @@ class VisualPIDSimulatorApp(tk.Tk):
         self.lbl_error.config(text=f"{sign}{err:.1f} cm")
         self.lbl_servo.config(text=f"{int(self.servo_angle)}°")
         self.lbl_vel.config(text=f"{self.velocity:+.1f} cm/s")
-        self.lbl_iae.config(text=f"{self.iae:.1f}")
+        self.lbl_iae.config(text=f"{self.step_iae:.1f} cm·s")
+        self.lbl_itae.config(text=f"{self.step_itae:.1f} cm·s²")
 
         self.draw_mechanical_rig()
         self.draw_graph()
