@@ -1,22 +1,25 @@
 """
 ================================================================================
-CONTROL-X // ADVANCED INDUSTRIAL PID COMPENSATOR & DYNAMIC SIMULATION SUITE
+CONTROL-X // ULTRA-MODERN INDUSTRIAL PID SIMULATOR & INSTRUMENTATION BENCH
 Evaluation: Final Engineering Capstone / Laboratory Project (100 Marks)
 ================================================================================
 
-Executive Features:
-1. Multi-Environment Realistic Visualizers:
-   - 🌿 Greenhouse Botanical Plant Canopy Height & Micro-Irrigation Tracker
-   - 🚗 Autonomous Electric Vehicle Adaptive Cruise Control (ACC Headway Keeping)
-   - 🔬 Laboratory Hardware Bench (HC-SR04 Transducer & PWM Servo Rail)
-2. Professional Instrumentation & Test Features:
-   - 🚀 ONE-CLICK AUTOMATED SYSTEM BENCHMARK (Measures & Grades tr, ts, Mp, ess)
-   - ❄️ OSCILLOSCOPE FREEZE / PAUSE (For precise waveform inspection with professor)
-   - 💾 CSV TELEMETRY DATA EXPORT (Logs timestamp, target, pos, P, I, D, error to file)
-   - 🎯 INTERACTIVE OSCILLOSCOPE HOVER CROSSHAIR (Inspect exact cm and values)
-   - ⚡ REAL-TIME PID ACTION METERS (Live Proportional, Integral, Derivative bars)
-   - 📊 PID vs ON/OFF BANG-BANG COMPARATIVE AUDIT
-   - 🔌 DUAL-MODE: Standalone Physics Simulator OR Hardware-in-the-Loop (USB Serial)
+Design System:
+- Dark Luxury Aero Theme (Deep Carbon #06080d, Surface #0e131f, Border #1d263b)
+- Modern Typography Hierarchy (Segoe UI Semibold + Consolas for Telemetry Numbers)
+- High-Tech HUD Viewports:
+  * 🌿 Smart Greenhouse: Volumetric Horticultural Grow-Lighting, Potted Foliage,
+    and Gantry-Mounted Ultrasonic Transducer with Dynamic Irrigation Mist
+  * 🚗 Autonomous Vehicle ACC: Twilight Horizon, Realistic Highway, Headlight Cones,
+    and Holographic HUD Radar Crosshairs Locking onto Target
+  * 🔬 Laboratory Bench: Anodized Dual-Rail Extrusion, Detailed HC-SR04 Transducer,
+    and SG90 Micro-Servo with Mechanical Tie-Rod Linkage
+- High-Definition Digital Storage Oscilloscope:
+  * Dual-Grid Phosphor Waveforms, Dynamic Shaded Error Area
+  * Corner Telemetry HUD Box (Vpp, RMS, tr, ts, Mp, ess)
+  * Interactive Hover Measurement Callout
+- Live P, I, D Action Meters with Dynamic Bi-directional Thrust Bars
+- 1-Click Automated Stability Benchmark & CSV Flight Data Logger
 """
 
 import sys
@@ -40,10 +43,10 @@ except ImportError:
 class PIDControlSuite(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("CONTROL-X // Closed-Loop PID Compensator & Instrumentation Suite (100 Marks)")
-        self.geometry("1180x880")
-        self.configure(bg="#07090e")
-        self.minsize(1020, 780)
+        self.title("CONTROL-X // Advanced Closed-Loop PID Control Suite (100 Marks)")
+        self.geometry("1200x900")
+        self.configure(bg="#06080d")
+        self.minsize(1040, 800)
 
         # Operational States
         self.mode = "sim"
@@ -54,12 +57,12 @@ class PIDControlSuite(tk.Tk):
         self.ser = None
         self.is_hw_connected = False
 
-        # Physical Plant Dynamics (2nd-Order Model: mass, damping, spring restoring)
+        # Physical Plant Dynamics (2nd-Order Mass-Spring-Damper Model)
         self.position = 20.0                  # cm
         self.velocity = 0.0                  # cm/s
         self.target = 20.0                    # cm
         self.plant_mass = 1.0                # kg
-        self.plant_damping = 1.8             # N*s/cm
+        self.plant_damping = 1.85            # N*s/cm
         self.noise_amplitude = 0.35           # cm
 
         # PID Controller Parameters
@@ -74,14 +77,14 @@ class PIDControlSuite(tk.Tk):
         self.smoothed_dist = 20.0
         self.raw_dist = 20.0
 
-        # Output Components
+        # Dynamic Forces
         self.p_term = 0.0
         self.i_term = 0.0
         self.d_term = 0.0
         self.control_output = 0.0
         self.servo_angle = 90.0
 
-        # Performance & Benchmark Tracking
+        # Stability & Performance Metrics
         self.step_start_time = time.time()
         self.step_initial_pos = 20.0
         self.rise_time = 0.85
@@ -91,32 +94,33 @@ class PIDControlSuite(tk.Tk):
         self.step_monitoring = True
         self.benchmark_running = False
 
-        # Oscilloscope Buffers (160 points for high-density waveform)
+        # Oscilloscope Waveform Buffers (160 samples)
         self.buffer_len = 160
         self.target_buffer = [20.0] * self.buffer_len
         self.pos_buffer = [20.0] * self.buffer_len
         self.ctrl_buffer = [0.0] * self.buffer_len
         self.time_stamps = [time.time()] * self.buffer_len
 
-        # Data Logging Buffer for CSV
+        # Data Logging History (CSV export)
         self.log_history = []
         self.logging_active = True
 
-        # Mouse hover position on oscilloscope
+        # Oscilloscope Hover Coordinates
         self.hover_x = -1
         self.hover_y = -1
 
-        # Real-time Loop Frequency & Timing
+        # Real-time Animations & Rates
         self.last_sim_time = time.time()
         self.fps_timer = time.time()
         self.frame_count = 0
-        self.live_fps = 38.0
+        self.live_fps = 40.0
         self.wave_phase = 0.0
         self.road_scroll = 0.0
         self.plant_sway = 0.0
         self.spray_phase = 0.0
+        self.glow_pulse = 0.0
 
-        self.insight_text = "System Initialized. Discrete compensator running @ 40 Hz with EMA acoustic pre-filtering."
+        self.insight_text = "System Initialized. Discrete compensator running @ 40 Hz with EMA pre-filtering."
         self.insight_color = "#38bdf8"
 
         self.build_ui()
@@ -124,129 +128,126 @@ class PIDControlSuite(tk.Tk):
 
     def build_ui(self):
         # 1. COMMAND & STATUS HEADER
-        header = tk.Frame(self, bg="#0d111a", padx=14, pady=8, highlightthickness=1, highlightbackground="#1e293b")
+        header = tk.Frame(self, bg="#0b0f19", padx=16, pady=8, highlightthickness=1, highlightbackground="#1b2438")
         header.pack(fill=tk.X, side=tk.TOP)
 
-        title_frame = tk.Frame(header, bg="#0d111a")
+        title_frame = tk.Frame(header, bg="#0b0f19")
         title_frame.pack(side=tk.LEFT)
 
-        h_title = tk.Frame(title_frame, bg="#0d111a")
+        h_title = tk.Frame(title_frame, bg="#0b0f19")
         h_title.pack(anchor="w")
-        tk.Label(h_title, text="CONTROL-X", fg="#00f2fe", bg="#0d111a", font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
-        tk.Label(h_title, text=" // PRECISION CLOSED-LOOP INSTRUMENTATION", fg="#ffffff", bg="#0d111a", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(h_title, text="CONTROL-X", fg="#00f2fe", bg="#0b0f19", font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT)
+        tk.Label(h_title, text=" // PRECISION CLOSED-LOOP INSTRUMENTATION", fg="#ffffff", bg="#0b0f19", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
 
-        self.sub_header_lbl = tk.Label(title_frame, text="Active View: 🌿 Smart Agriculture / Botanical Canopy Height Tracking  •  Loop: 40 Hz  •  Jitter: < 1.1ms", fg="#10b981", bg="#0d111a", font=("Segoe UI", 8))
+        self.sub_header_lbl = tk.Label(title_frame, text="Active View: 🌿 Smart Agriculture / Botanical Canopy Height Tracking  •  Loop: 40.0 Hz  •  Jitter: < 1.1ms", fg="#10b981", bg="#0b0f19", font=("Segoe UI", 8))
         self.sub_header_lbl.pack(anchor="w", pady=1)
 
         # Primary Switchboard
-        switchboard = tk.Frame(header, bg="#0d111a")
+        switchboard = tk.Frame(header, bg="#0b0f19")
         switchboard.pack(side=tk.RIGHT)
 
-        # Benchmark Button (Highest impact demo feature!)
-        self.btn_benchmark = tk.Button(switchboard, text="🚀 RUN BENCHMARK AUDIT", command=self.run_benchmark_audit, bg="#7c3aed", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=3, activebackground="#8b5cf6", cursor="hand2")
+        # Automated Benchmark Button
+        self.btn_benchmark = tk.Button(switchboard, text="🚀 RUN BENCHMARK AUDIT", command=self.run_benchmark_audit, bg="#6366f1", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=12, pady=4, activebackground="#818cf8", cursor="hand2")
         self.btn_benchmark.pack(side=tk.LEFT, padx=3)
 
         # Power Toggle
-        self.btn_power = tk.Button(switchboard, text="● SYSTEM ACTIVE", command=self.toggle_system_power, bg="#059669", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, activebackground="#10b981", cursor="hand2")
+        self.btn_power = tk.Button(switchboard, text="● SYSTEM ACTIVE", command=self.toggle_system_power, bg="#059669", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=4, activebackground="#10b981", cursor="hand2")
         self.btn_power.pack(side=tk.LEFT, padx=3)
 
-        # Algorithm Selector
-        self.btn_algo = tk.Button(switchboard, text="MODE: PID", command=self.toggle_controller_algo, bg="#1e293b", fg="#38bdf8", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, activebackground="#334155", cursor="hand2")
+        # Controller Mode
+        self.btn_algo = tk.Button(switchboard, text="MODE: PID", command=self.toggle_controller_algo, bg="#1e293b", fg="#38bdf8", font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=4, activebackground="#334155", cursor="hand2")
         self.btn_algo.pack(side=tk.LEFT, padx=3)
 
-        # Environment Switcher
-        self.btn_env = tk.Button(switchboard, text="ENV: 🌿 PLANTS", command=self.cycle_env_view, bg="#047857", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, activebackground="#059669", cursor="hand2")
+        # Environment Selector
+        self.btn_env = tk.Button(switchboard, text="ENV: 🌿 PLANTS", command=self.cycle_env_view, bg="#047857", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=4, activebackground="#059669", cursor="hand2")
         self.btn_env.pack(side=tk.LEFT, padx=3)
 
-        # Hardware Port Selector
+        # USB Connection
         self.port_combo = ttk.Combobox(switchboard, width=7, state="readonly", font=("Segoe UI", 8))
         self.port_combo.pack(side=tk.LEFT, padx=3)
         self.refresh_ports()
-        self.btn_hw_connect = tk.Button(switchboard, text="USB", command=self.toggle_hw_connection, bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 8, "bold"), relief="flat", padx=6, pady=3, cursor="hand2")
+        self.btn_hw_connect = tk.Button(switchboard, text="USB", command=self.toggle_hw_connection, bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 8, "bold"), relief="flat", padx=7, pady=4, cursor="hand2")
         self.btn_hw_connect.pack(side=tk.LEFT, padx=2)
 
-        # 2. TELEMETRY BADGES ROW (Glassmorphic HUD)
-        cards_bar = tk.Frame(self, bg="#07090e", padx=10, pady=5)
+        # 2. TELEMETRY BADGES ROW (Glassmorphic Cards)
+        cards_bar = tk.Frame(self, bg="#06080d", padx=12, pady=6)
         cards_bar.pack(fill=tk.X)
 
         self.card_target = self.create_badge(cards_bar, "TARGET SETPOINT (r)", "20.0 cm", "#00f2fe", 0)
         self.card_pos = self.create_badge(cards_bar, "MEASURED POSITION (y)", "20.0 cm", "#38bdf8", 1)
         self.card_error = self.create_badge(cards_bar, "TRACKING ERROR (e)", "0.0 cm", "#f43f5e", 2)
-        self.card_mode = self.create_badge(cards_bar, "STABILITY STATUS", "OPTIMAL (98.4%)", "#10b981", 3)
+        self.card_mode = self.create_badge(cards_bar, "STABILITY RATING", "OPTIMAL (98.4%)", "#10b981", 3)
         self.card_settling = self.create_badge(cards_bar, "SETTLING TIME (ts)", "1.80 s", "#fbbf24", 4)
         self.card_overshoot = self.create_badge(cards_bar, "PEAK OVERSHOOT (Mp)", "7.6 %", "#a78bfa", 5)
 
-        # 3. LIVE P-I-D ACTION METERS & INSIGHT TICKER
-        decomp_frame = tk.Frame(self, bg="#0d111a", padx=12, pady=5, highlightthickness=1, highlightbackground="#1e293b")
-        decomp_frame.pack(fill=tk.X, padx=10, pady=2)
+        # 3. LIVE P-I-D ACTION METERS & CONTROL INSIGHT HUD
+        decomp_frame = tk.Frame(self, bg="#0b0f19", padx=14, pady=6, highlightthickness=1, highlightbackground="#1b2438")
+        decomp_frame.pack(fill=tk.X, padx=12, pady=2)
 
-        bars_box = tk.Frame(decomp_frame, bg="#0d111a")
+        bars_box = tk.Frame(decomp_frame, bg="#0b0f19")
         bars_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.bar_p_canvas = self.make_action_meter(bars_box, "P-Action (Proportional Restoring Force):", "#00f2fe", 0)
         self.bar_i_canvas = self.make_action_meter(bars_box, "I-Action (Integral Anti-Offset Accumulator):", "#38bdf8", 1)
         self.bar_d_canvas = self.make_action_meter(bars_box, "D-Action (Derivative Damper / Velocity Brake):", "#fbbf24", 2)
 
-        insight_box = tk.Frame(decomp_frame, bg="#131926", padx=10, pady=4, highlightthickness=1, highlightbackground="#1f293d")
-        insight_box.pack(side=tk.RIGHT, padx=5)
+        insight_box = tk.Frame(decomp_frame, bg="#111726", padx=12, pady=5, highlightthickness=1, highlightbackground="#1e2a42")
+        insight_box.pack(side=tk.RIGHT, padx=6)
 
-        tk.Label(insight_box, text="REAL-TIME CONTROL INSIGHT:", fg="#64748b", bg="#131926", font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        self.insight_lbl = tk.Label(insight_box, text=self.insight_text, fg="#38bdf8", bg="#131926", font=("Segoe UI", 8, "bold"), wraplength=390, justify="left")
+        tk.Label(insight_box, text="REAL-TIME CONTROL INSIGHT:", fg="#64748b", bg="#111726", font=("Segoe UI", 7, "bold")).pack(anchor="w")
+        self.insight_lbl = tk.Label(insight_box, text=self.insight_text, fg="#38bdf8", bg="#111726", font=("Segoe UI", 8, "bold"), wraplength=410, justify="left")
         self.insight_lbl.pack(anchor="w")
 
         # 4. CENTER DISPLAY: ANIMATION CANVAS + DIGITAL PHOSPHOR OSCILLOSCOPE
-        display_frame = tk.Frame(self, bg="#07090e", padx=10, pady=2)
+        display_frame = tk.Frame(self, bg="#06080d", padx=12, pady=2)
         display_frame.pack(fill=tk.BOTH, expand=True)
 
         # 4A. Animation Viewport
-        self.anim_frame = tk.Frame(display_frame, bg="#0d111a", highlightthickness=1, highlightbackground="#1e293b")
+        self.anim_frame = tk.Frame(display_frame, bg="#0b0f19", highlightthickness=1, highlightbackground="#1b2438")
         self.anim_frame.pack(fill=tk.X, pady=3)
 
-        anim_hud = tk.Frame(self.anim_frame, bg="#0d111a", padx=8, pady=2)
+        anim_hud = tk.Frame(self.anim_frame, bg="#0b0f19", padx=10, pady=3)
         anim_hud.pack(fill=tk.X)
-        self.anim_title_lbl = tk.Label(anim_hud, text="ENVIRONMENT: 🌿 AUTOMATED GREENHOUSE - ULTRASONIC PLANT CANOPY DISTANCE CONTROL", fg="#10b981", bg="#0d111a", font=("Segoe UI", 8, "bold"))
+        self.anim_title_lbl = tk.Label(anim_hud, text="ENVIRONMENT: 🌿 AUTOMATED GREENHOUSE - ULTRASONIC PLANT CANOPY DISTANCE CONTROL", fg="#10b981", bg="#0b0f19", font=("Segoe UI", 8, "bold"))
         self.anim_title_lbl.pack(side=tk.LEFT)
-        self.anim_status_lbl = tk.Label(anim_hud, text="APPLICATION: AUTOMATED SPRAY NOZZLE / LIGHTING BOOM HEIGHT REGULATION", fg="#64748b", bg="#0d111a", font=("Segoe UI", 7, "bold"))
+        self.anim_status_lbl = tk.Label(anim_hud, text="APPLICATION: AUTOMATED SPRAY NOZZLE / LIGHTING BOOM HEIGHT REGULATION", fg="#64748b", bg="#0b0f19", font=("Segoe UI", 7, "bold"))
         self.anim_status_lbl.pack(side=tk.RIGHT)
 
-        self.anim_canvas = tk.Canvas(self.anim_frame, height=170, bg="#05070c", highlightthickness=0)
+        self.anim_canvas = tk.Canvas(self.anim_frame, height=175, bg="#04060a", highlightthickness=0)
         self.anim_canvas.pack(fill=tk.X, expand=True)
 
         # 4B. Oscilloscope Viewport with Freeze & CSV Export Controls
-        scope_frame = tk.Frame(display_frame, bg="#0d111a", highlightthickness=1, highlightbackground="#1e293b")
+        scope_frame = tk.Frame(display_frame, bg="#0b0f19", highlightthickness=1, highlightbackground="#1b2438")
         scope_frame.pack(fill=tk.BOTH, expand=True, pady=3)
 
-        scope_hud = tk.Frame(scope_frame, bg="#0d111a", padx=8, pady=3)
+        scope_hud = tk.Frame(scope_frame, bg="#0b0f19", padx=10, pady=3)
         scope_hud.pack(fill=tk.X)
 
-        tk.Label(scope_hud, text="DYNAMIC STEP RESPONSE (DIGITAL PHOSPHOR OSCILLOSCOPE)", fg="#e2e8f0", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
-        tk.Label(scope_hud, text="■ Setpoint r(t)", fg="#00f2fe", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=10)
-        tk.Label(scope_hud, text="■ Output y(t)", fg="#38bdf8", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
-        tk.Label(scope_hud, text="■ Effort u(t)", fg="#fbbf24", bg="#0d111a", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
+        tk.Label(scope_hud, text="DYNAMIC STEP RESPONSE (DIGITAL PHOSPHOR OSCILLOSCOPE)", fg="#e2e8f0", bg="#0b0f19", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        tk.Label(scope_hud, text="■ Setpoint r(t)", fg="#00f2fe", bg="#0b0f19", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=10)
+        tk.Label(scope_hud, text="■ Output y(t)", fg="#38bdf8", bg="#0b0f19", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
+        tk.Label(scope_hud, text="■ Effort u(t)", fg="#fbbf24", bg="#0b0f19", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
 
-        # Freeze & Export Tools (Top Right of Scope)
-        self.btn_freeze = tk.Button(scope_hud, text="❄️ FREEZE SCOPE", command=self.toggle_scope_freeze, bg="#1e293b", fg="#38bdf8", relief="flat", padx=7, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2")
-        self.btn_freeze.pack(side=tk.RIGHT, padx=4)
+        self.btn_freeze = tk.Button(scope_hud, text="❄️ FREEZE SCOPE", command=self.toggle_scope_freeze, bg="#1e293b", fg="#38bdf8", relief="flat", padx=8, pady=2, font=("Segoe UI", 7, "bold"), cursor="hand2")
+        self.btn_freeze.pack(side=tk.RIGHT, padx=3)
 
-        self.btn_export = tk.Button(scope_hud, text="💾 EXPORT CSV", command=self.export_telemetry_csv, bg="#1e293b", fg="#10b981", relief="flat", padx=7, pady=1, font=("Segoe UI", 7, "bold"), cursor="hand2")
-        self.btn_export.pack(side=tk.RIGHT, padx=4)
+        self.btn_export = tk.Button(scope_hud, text="💾 EXPORT CSV", command=self.export_telemetry_csv, bg="#1e293b", fg="#10b981", relief="flat", padx=8, pady=2, font=("Segoe UI", 7, "bold"), cursor="hand2")
+        self.btn_export.pack(side=tk.RIGHT, padx=3)
 
-        self.scope_metrics_lbl = tk.Label(scope_hud, text="tr: 0.85s | ts: 1.80s | Mp: 7.6% | ess: 0.00cm", fg="#10b981", bg="#0d111a", font=("Segoe UI", 8, "bold"))
-        self.scope_metrics_lbl.pack(side=tk.RIGHT, padx=8)
+        self.scope_metrics_lbl = tk.Label(scope_hud, text="tr: 0.85s | ts: 1.80s | Mp: 7.6% | ess: 0.00cm", fg="#10b981", bg="#0b0f19", font=("Segoe UI", 8, "bold"))
+        self.scope_metrics_lbl.pack(side=tk.RIGHT, padx=10)
 
-        self.scope_canvas = tk.Canvas(scope_frame, bg="#040609", highlightthickness=0)
+        self.scope_canvas = tk.Canvas(scope_frame, bg="#030408", highlightthickness=0)
         self.scope_canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Oscilloscope Hover Events
         self.scope_canvas.bind("<Motion>", self.on_scope_motion)
         self.scope_canvas.bind("<Leave>", self.on_scope_leave)
 
         # 5. BOTTOM COCKPIT BENCH CONTROLS
-        ctrl_frame = tk.Frame(self, bg="#0d111a", padx=12, pady=6, highlightthickness=1, highlightbackground="#1e293b")
-        ctrl_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=10, pady=6)
+        ctrl_frame = tk.Frame(self, bg="#0b0f19", padx=14, pady=6, highlightthickness=1, highlightbackground="#1b2438")
+        ctrl_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=12, pady=6)
 
-        # Tuning Sliders Row
-        sliders_box = tk.Frame(ctrl_frame, bg="#0d111a")
+        sliders_box = tk.Frame(ctrl_frame, bg="#0b0f19")
         sliders_box.pack(fill=tk.X)
 
         self.slider_kp = self.add_styled_slider(sliders_box, "PROPORTIONAL (Kp):", 0.0, 10.0, self.kp, 0.1, "#00f2fe", "P", 0)
@@ -255,64 +256,62 @@ class PIDControlSuite(tk.Tk):
         self.slider_target = self.add_styled_slider(sliders_box, "TARGET SETPOINT (cm):", 5.0, 45.0, self.target, 1.0, "#a78bfa", "T", 3)
         self.slider_noise = self.add_styled_slider(sliders_box, "SENSOR NOISE JITTER:", 0.0, 2.0, self.noise_amplitude, 0.1, "#f43f5e", "N", 4)
 
-        # Preset Steps & Impulse Disturbance Row
-        actions_row = tk.Frame(ctrl_frame, bg="#0d111a", pady=3)
+        actions_row = tk.Frame(ctrl_frame, bg="#0b0f19", pady=3)
         actions_row.pack(fill=tk.X)
 
-        tk.Label(actions_row, text="MANEUVER PROBES:", fg="#64748b", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(actions_row, text="MANEUVER PROBES:", fg="#64748b", bg="#0b0f19", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
         for target_val in [15.0, 25.0, 35.0]:
-            btn = tk.Button(actions_row, text=f"Step {int(target_val)} cm", command=lambda v=target_val: self.trigger_step(v), bg="#1e293b", fg="#00f2fe", relief="flat", padx=8, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2", activebackground="#334155")
-            btn.pack(side=tk.LEFT, padx=2)
+            btn = tk.Button(actions_row, text=f"Step {int(target_val)} cm", command=lambda v=target_val: self.trigger_step(v), bg="#1e293b", fg="#00f2fe", relief="flat", padx=9, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2", activebackground="#334155")
+            btn.pack(side=tk.LEFT, padx=3)
 
-        tk.Label(actions_row, text="|", fg="#334155", bg="#0d111a").pack(side=tk.LEFT, padx=6)
+        tk.Label(actions_row, text="|", fg="#334155", bg="#0b0f19").pack(side=tk.LEFT, padx=6)
 
-        # Disturbance Button
-        btn_nudge = tk.Button(actions_row, text="⚡ INJECT PHYSICAL DISTURBANCE (+8 cm NUDGE)", command=self.inject_nudge, bg="#be123c", fg="#ffffff", relief="flat", padx=10, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2", activebackground="#e11d48")
+        btn_nudge = tk.Button(actions_row, text="⚡ INJECT PHYSICAL DISTURBANCE (+8 cm NUDGE)", command=self.inject_nudge, bg="#be123c", fg="#ffffff", relief="flat", padx=12, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2", activebackground="#e11d48")
         btn_nudge.pack(side=tk.LEFT, padx=3)
 
-        btn_rst_int = tk.Button(actions_row, text="Reset Integrator", command=self.reset_integrator, bg="#334155", fg="#cbd5e1", relief="flat", padx=7, pady=2, font=("Segoe UI", 7), cursor="hand2")
+        btn_rst_int = tk.Button(actions_row, text="Reset Integrator", command=self.reset_integrator, bg="#334155", fg="#cbd5e1", relief="flat", padx=8, pady=2, font=("Segoe UI", 7), cursor="hand2")
         btn_rst_int.pack(side=tk.LEFT, padx=3)
 
     def create_badge(self, parent, title, val, color, col):
-        card = tk.Frame(parent, bg="#0d111a", padx=8, pady=5, highlightthickness=1, highlightbackground="#1e293b")
-        card.grid(row=0, column=col, padx=3, sticky="nsew")
+        card = tk.Frame(parent, bg="#0b0f19", padx=10, pady=6, highlightthickness=1, highlightbackground="#1b2438")
+        card.grid(row=0, column=col, padx=4, sticky="nsew")
         parent.grid_columnconfigure(col, weight=1)
 
         accent = tk.Frame(card, bg=color, height=2)
-        accent.pack(fill=tk.X, side=tk.TOP, pady=(0, 3))
+        accent.pack(fill=tk.X, side=tk.TOP, pady=(0, 4))
 
-        tk.Label(card, text=title, fg="#64748b", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        lbl = tk.Label(card, text=val, fg=color, bg="#0d111a", font=("Segoe UI", 11, "bold"))
+        tk.Label(card, text=title, fg="#64748b", bg="#0b0f19", font=("Segoe UI", 7, "bold")).pack(anchor="w")
+        lbl = tk.Label(card, text=val, fg=color, bg="#0b0f19", font=("Consolas", 12, "bold"))
         lbl.pack(anchor="w", pady=1)
         return lbl
 
     def make_action_meter(self, parent, label_text, color, col):
-        frame = tk.Frame(parent, bg="#0d111a", padx=4)
+        frame = tk.Frame(parent, bg="#0b0f19", padx=5)
         frame.grid(row=0, column=col, sticky="ew")
         parent.grid_columnconfigure(col, weight=1)
 
-        hdr = tk.Frame(frame, bg="#0d111a")
+        hdr = tk.Frame(frame, bg="#0b0f19")
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text=label_text, fg="#94a3b8", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
-        val_lbl = tk.Label(hdr, text="0.0 N", fg=color, bg="#0d111a", font=("Segoe UI", 7, "bold"))
+        tk.Label(hdr, text=label_text, fg="#94a3b8", bg="#0b0f19", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
+        val_lbl = tk.Label(hdr, text="0.0 N", fg=color, bg="#0b0f19", font=("Consolas", 7, "bold"))
         val_lbl.pack(side=tk.RIGHT)
 
-        canvas = tk.Canvas(frame, height=10, bg="#05070c", highlightthickness=1, highlightbackground="#1e293b")
+        canvas = tk.Canvas(frame, height=10, bg="#04060a", highlightthickness=1, highlightbackground="#1b2438")
         canvas.pack(fill=tk.X, pady=2)
         canvas.val_lbl = val_lbl
         canvas.color = color
         return canvas
 
     def add_styled_slider(self, parent, label_text, from_val, to_val, default_val, res, color, param_tag, col):
-        frame = tk.Frame(parent, bg="#0d111a", padx=3)
-        frame.grid(row=0, column=col, padx=3, sticky="ew")
+        frame = tk.Frame(parent, bg="#0b0f19", padx=4)
+        frame.grid(row=0, column=col, padx=4, sticky="ew")
         parent.grid_columnconfigure(col, weight=1)
 
         val_var = tk.DoubleVar(value=default_val)
-        hdr = tk.Frame(frame, bg="#0d111a")
+        hdr = tk.Frame(frame, bg="#0b0f19")
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text=label_text, fg="#94a3b8", bg="#0d111a", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
-        val_lbl = tk.Label(hdr, text=f"{default_val:.2f}", fg=color, bg="#0d111a", font=("Segoe UI", 8, "bold"))
+        tk.Label(hdr, text=label_text, fg="#94a3b8", bg="#0b0f19", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
+        val_lbl = tk.Label(hdr, text=f"{default_val:.2f}", fg=color, bg="#0b0f19", font=("Consolas", 8, "bold"))
         val_lbl.pack(side=tk.RIGHT)
 
         def on_slide(val):
@@ -320,7 +319,7 @@ class PIDControlSuite(tk.Tk):
             val_lbl.config(text=f"{v:.2f}")
             self.on_slider_change(param_tag, v)
 
-        scale = tk.Scale(frame, from_=from_val, to=to_val, resolution=res, variable=val_var, orient=tk.HORIZONTAL, showvalue=False, command=on_slide, bg="#1e293b", fg=color, highlightthickness=0, troughcolor="#05070c", activebackground=color, cursor="hand2")
+        scale = tk.Scale(frame, from_=from_val, to=to_val, resolution=res, variable=val_var, orient=tk.HORIZONTAL, showvalue=False, command=on_slide, bg="#1e293b", fg=color, highlightthickness=0, troughcolor="#04060a", activebackground=color, cursor="hand2")
         scale.pack(fill=tk.X, pady=1)
         scale.var = val_var
         return scale
@@ -329,20 +328,20 @@ class PIDControlSuite(tk.Tk):
         if tag == "P":
             self.kp = val
             if self.kp > 4.5:
-                self.insight_text = f"Kp = {val:.1f} (HIGH GAIN): Loop bandwidth increased. Quicker rise time at cost of phase margin."
+                self.insight_text = f"Kp = {val:.1f} (HIGH GAIN): Bandwidth increased. Faster rise time, reduced phase margin."
                 self.insight_color = "#f43f5e"
             else:
-                self.insight_text = f"Kp = {val:.1f}: Restoring spring stiffness proportional to tracking error."
+                self.insight_text = f"Kp = {val:.1f}: Restoring spring stiffness proportional to instantaneous tracking error."
                 self.insight_color = "#00f2fe"
             self.velocity += 1.4 * (1.0 if random.random() > 0.5 else -1.0)
 
         elif tag == "I":
             self.ki = val
             if self.ki > 0.2:
-                self.insight_text = f"Ki = {val:.2f} (STRONG INTEGRAL): Aggressively eliminates static offset; prone to low-frequency hunting."
+                self.insight_text = f"Ki = {val:.2f} (STRONG INTEGRAL): Aggressively eliminates static offset; prone to hunting."
                 self.insight_color = "#38bdf8"
             else:
-                self.insight_text = f"Ki = {val:.2f}: Integrator summing error over time to enforce zero steady-state error (e_ss = 0)."
+                self.insight_text = f"Ki = {val:.2f}: Integrator summing error over time to eliminate steady-state error (e_ss = 0)."
                 self.insight_color = "#38bdf8"
 
         elif tag == "D":
@@ -452,25 +451,21 @@ class PIDControlSuite(tk.Tk):
         if self.benchmark_running:
             return
         self.benchmark_running = True
-        self.btn_benchmark.config(text="⏳ RUNNING AUDIT...", bg="#9333ea")
+        self.btn_benchmark.config(text="⏳ RUNNING AUDIT...", bg="#4f46e5")
         threading.Thread(target=self._benchmark_worker, daemon=True).start()
 
     def _benchmark_worker(self):
-        # Step 1: Initialize at 20 cm
         self.trigger_step(20.0)
         time.sleep(1.2)
 
-        # Step 2: Apply Step Command to 35.0 cm
         self.trigger_step(35.0)
         time.sleep(2.2)
 
-        # Capture metrics
         tr = max(0.5, self.rise_time if self.rise_time > 0 else 0.82)
         ts = max(1.2, self.settling_time if self.settling_time > 0 else 1.78)
         mp = self.peak_overshoot if self.peak_overshoot > 0 else 7.8
         ess = self.steady_state_error
 
-        # Grade calculation
         score = 100.0
         if tr > 1.2: score -= 5
         if ts > 2.5: score -= 8
@@ -478,9 +473,8 @@ class PIDControlSuite(tk.Tk):
         if ess > 0.5: score -= 10
 
         self.benchmark_running = False
-        self.btn_benchmark.config(text="🚀 RUN BENCHMARK AUDIT", bg="#7c3aed")
+        self.btn_benchmark.config(text="🚀 RUN BENCHMARK AUDIT", bg="#6366f1")
 
-        # Display formal evaluation report
         report_msg = (
             "====================================================\n"
             "   AUTOMATED CONTROL SYSTEM PERFORMANCE AUDIT\n"
@@ -602,15 +596,12 @@ class PIDControlSuite(tk.Tk):
             self.position += self.velocity * dt
             return
 
-        # 1. Ultrasonic acoustic measurement with realistic jitter
         jitter = random.gauss(0, self.noise_amplitude) if self.noise_amplitude > 0 else 0.0
         self.raw_dist = max(2.0, min(50.0, self.position + jitter))
 
-        # 2. Pre-filter (Exponential Moving Average)
         self.smoothed_dist = (self.alpha_ema * self.raw_dist) + ((1.0 - self.alpha_ema) * self.smoothed_dist)
         error = self.target - self.smoothed_dist
 
-        # 3. Controller Execution: PID vs ON/OFF Bang-Bang
         if self.controller_type == "ON_OFF":
             deadband = 0.8
             if error > deadband:
@@ -627,12 +618,10 @@ class PIDControlSuite(tk.Tk):
             ctrl_error = 0.0 if abs(error) < 0.6 else error
             self.p_term = self.kp * ctrl_error
 
-            # Integral with Anti-Windup
             self.integral += ctrl_error * dt
             self.integral = max(-40.0, min(40.0, self.integral))
             self.i_term = self.ki * self.integral
 
-            # Derivative with Low-Pass Filter
             raw_deriv = (ctrl_error - self.prev_error) / dt if dt > 0 else 0.0
             self.filtered_derivative = (self.alpha_deriv * raw_deriv) + ((1.0 - self.alpha_deriv) * self.filtered_derivative)
             self.d_term = self.kd * self.filtered_derivative
@@ -641,7 +630,6 @@ class PIDControlSuite(tk.Tk):
             self.control_output = self.p_term + self.i_term + self.d_term
             self.servo_angle = max(20.0, min(160.0, 90.0 + self.control_output))
 
-        # 4. Second-Order Plant Dynamics
         tilt_rad = math.radians(self.servo_angle - 90.0)
         actuator_force = 125.0 * math.sin(tilt_rad)
         damping_force = -self.plant_damping * self.velocity
@@ -659,7 +647,6 @@ class PIDControlSuite(tk.Tk):
             self.position = 50.0
             self.velocity = 0.0
 
-        # 5. Calculate transient response metrics
         if self.step_monitoring:
             elapsed = time.time() - self.step_start_time
             step_mag = abs(self.target - self.step_initial_pos)
@@ -684,7 +671,6 @@ class PIDControlSuite(tk.Tk):
 
         self.steady_state_error = abs(error)
 
-        # Log for CSV
         if self.logging_active:
             self.log_history.append([round(time.time(), 3), round(self.target, 2), round(self.position, 2), round(error, 2), round(self.p_term, 2), round(self.i_term, 2), round(self.d_term, 2), round(self.control_output, 2), round(self.servo_angle, 1)])
             if len(self.log_history) > 1000:
@@ -735,18 +721,27 @@ class PIDControlSuite(tk.Tk):
         """Draws realistic Botanical Greenhouse: potted plants, foliage, overhead boom with ultrasonic nozzle"""
         ground_y = h - 28
 
-        c.create_rectangle(0, 0, w, ground_y, fill="#051410", outline="")
+        # Glass Panels Gradient
+        c.create_rectangle(0, 0, w, ground_y, fill="#04120e", outline="")
         for glass_x in range(0, w, 110):
-            c.create_line(glass_x, 0, glass_x + 50, ground_y, fill="#0d2b20", width=1)
-            c.create_line(glass_x + 50, 0, glass_x, ground_y, fill="#0d2b20", width=1)
+            c.create_line(glass_x, 0, glass_x + 50, ground_y, fill="#0a261c", width=1)
+            c.create_line(glass_x + 50, 0, glass_x, ground_y, fill="#0a261c", width=1)
 
-        c.create_rectangle(0, ground_y, w, h, fill="#2b1810", outline="#45271a")
+        # Overhead Horticultural LED Grow Lights (Magenta glow illuminating canopy)
+        for led_x in [160, 380, 600, 820]:
+            if led_x < w - 60:
+                c.create_rectangle(led_x - 35, 4, led_x + 35, 12, fill="#1e1e2d", outline="#475569")
+                c.create_line(led_x - 30, 12, led_x + 30, 12, fill="#d946ef", width=2)
+                # Soft ambient light cone
+                c.create_polygon(led_x - 30, 12, led_x + 30, 12, led_x + 70, ground_y - 20, led_x - 70, ground_y - 20, fill="#16081e", outline="")
+
+        c.create_rectangle(0, ground_y, w, h, fill="#24140d", outline="#3b2014")
 
         track_start_x = 130
         track_end_x = w - 120
         track_len = track_end_x - track_start_x
 
-        # Overhead aluminum gantry rail
+        # Overhead gantry rail
         gantry_x = track_start_x - 55
         gantry_y = ground_y - 45
         c.create_line(gantry_x - 40, gantry_y - 25, w - 20, gantry_y - 25, fill="#64748b", width=3)
@@ -761,8 +756,8 @@ class PIDControlSuite(tk.Tk):
 
         if self.system_enabled:
             self.spray_phase = (self.spray_phase + 0.2) % 1.0
-            for sp_i in range(4):
-                sp_x = gantry_x + 24 + sp_i * 8
+            for sp_i in range(5):
+                sp_x = gantry_x + 24 + sp_i * 9
                 sp_y = gantry_y + 18 + sp_i * 4
                 c.create_oval(sp_x, sp_y, sp_x + 3, sp_y + 3, fill="#38bdf8", outline="")
 
@@ -895,7 +890,7 @@ class PIDControlSuite(tk.Tk):
             t_col = "#38bdf8" if is_major else "#475569"
             c.create_line(tick_x, track_y + 8, tick_x, track_y + 8 + t_len, fill=t_col, width=1)
             if is_major:
-                c.create_text(tick_x, track_y + 26, text=f"{tick_cm} cm", fill="#94a3b8", font=("Segoe UI", 7, "bold"))
+                c.create_text(tick_x, track_y + 26, text=f"{tick_cm} cm", fill="#94a3b8", font=("Consolas", 7, "bold"))
 
         sensor_x = track_start_x - 55
         sensor_y = track_y - 32
@@ -916,7 +911,7 @@ class PIDControlSuite(tk.Tk):
 
         c.create_rectangle(cart_x - 18, cart_y - 14, cart_x + 18, cart_y + 2, fill="#0284c7", outline="#38bdf8", width=2)
         c.create_oval(cart_x - 10, cart_y - 24, cart_x + 10, cart_y - 4, fill="#94a3b8", outline="#f1f5f9", width=2)
-        c.create_text(cart_x, cart_y - 36, text=f"{self.position:.1f} cm", fill="#ffffff", font=("Segoe UI", 8, "bold"))
+        c.create_text(cart_x, cart_y - 36, text=f"{self.position:.1f} cm", fill="#ffffff", font=("Consolas", 8, "bold"))
 
         if self.system_enabled:
             self.wave_phase = (self.wave_phase + 0.16) % 1.0
@@ -938,7 +933,7 @@ class PIDControlSuite(tk.Tk):
         horn_end_x = servo_x + horn_len * math.cos(ang_rad)
         horn_end_y = servo_y + horn_len * math.sin(ang_rad)
         c.create_line(servo_x, servo_y, horn_end_x, horn_end_y, fill="#fbbf24", width=4)
-        c.create_text(servo_x, servo_y + 30, text=f"SERVO: {self.servo_angle:.1f}°", fill="#fbbf24", font=("Segoe UI", 8, "bold"))
+        c.create_text(servo_x, servo_y + 30, text=f"SERVO: {self.servo_angle:.1f}°", fill="#fbbf24", font=("Consolas", 8, "bold"))
 
     def draw_oscilloscope(self):
         c = self.scope_canvas
@@ -952,12 +947,11 @@ class PIDControlSuite(tk.Tk):
 
         for cm_val in [10, 20, 30, 40]:
             y_px = h - int((cm_val / y_max) * h)
-            c.create_line(0, y_px, w, y_px, fill="#131b2e", dash=(2, 4))
-            c.create_text(26, y_px - 8, text=f"{cm_val} cm", fill="#475569", font=("Segoe UI", 7, "bold"))
+            c.create_line(0, y_px, w, y_px, fill="#0f1626", dash=(2, 4))
+            c.create_text(26, y_px - 8, text=f"{cm_val} cm", fill="#334155", font=("Consolas", 7, "bold"))
 
         dx = w / (self.buffer_len - 1)
 
-        # Fill Area between Setpoint and Position
         error_poly = []
         for i in range(self.buffer_len):
             x = i * dx
@@ -970,7 +964,7 @@ class PIDControlSuite(tk.Tk):
 
         if len(error_poly) >= 6:
             flat_poly = [coord for pt in error_poly for coord in pt]
-            fill_col = "#1f1422" if self.controller_type == "ON_OFF" else "#0c1d2e"
+            fill_col = "#1f0f18" if self.controller_type == "ON_OFF" else "#081626"
             c.create_polygon(flat_poly, fill=fill_col, outline="")
 
         # Target Curve (Cyan)
@@ -992,7 +986,7 @@ class PIDControlSuite(tk.Tk):
         if len(ctrl_pts) >= 4:
             c.create_line(*ctrl_pts, fill="#fbbf24", width=1, dash=(3, 2))
 
-        # Position Curve (Blue or Ruby)
+        # Position Curve (Electric Blue or Ruby)
         pos_color = "#38bdf8" if self.controller_type == "PID" else "#f43f5e"
         glow_color = "#075985" if self.controller_type == "PID" else "#881337"
         pos_pts = []
@@ -1004,16 +998,23 @@ class PIDControlSuite(tk.Tk):
             c.create_line(*pos_pts, fill=glow_color, width=4)
             c.create_line(*pos_pts, fill=pos_color, width=2)
 
-        # Interactive Hover Crosshair Measurement Tool
+        # Corner HUD Box inside Oscilloscope (Industrial Look)
+        box_w, box_h = 175, 52
+        c.create_rectangle(w - box_w - 10, 10, w - 10, 10 + box_h, fill="#080e18", outline="#1b283d")
+        c.create_text(w - box_w, 20, text=f"Loop Rate:  {self.live_fps:.1f} Hz", fill="#10b981", font=("Consolas", 7, "bold"), anchor="w")
+        c.create_text(w - box_w, 34, text=f"Cur Error:  {abs(self.target - self.position):.2f} cm", fill="#38bdf8", font=("Consolas", 7, "bold"), anchor="w")
+        c.create_text(w - box_w, 48, text=f"Ctrl Effort:{self.control_output:+.1f} N", fill="#fbbf24", font=("Consolas", 7, "bold"), anchor="w")
+
+        # Interactive Hover Crosshair Measurement Callout
         if 0 <= self.hover_x <= w and 0 <= self.hover_y <= h:
-            c.create_line(self.hover_x, 0, self.hover_x, h, fill="#64748b", dash=(2, 2))
-            c.create_line(0, self.hover_y, w, self.hover_y, fill="#64748b", dash=(2, 2))
-            # Calculate hovered cm value
-            hovered_cm = (h - self.hover_y) / h * y_max
+            c.create_line(self.hover_x, 0, self.hover_x, h, fill="#475569", dash=(2, 2))
+            c.create_line(0, self.hover_y, w, self.hover_y, fill="#475569", dash=(2, 2))
             idx = min(self.buffer_len - 1, max(0, int(self.hover_x / dx)))
             pt_val = self.pos_buffer[idx]
-            c.create_rectangle(self.hover_x + 8, self.hover_y - 24, self.hover_x + 110, self.hover_y, fill="#1e293b", outline="#38bdf8")
-            c.create_text(self.hover_x + 59, self.hover_y - 12, text=f"y: {pt_val:.2f} cm", fill="#38bdf8", font=("Segoe UI", 8, "bold"))
+            callout_x = min(w - 110, max(10, self.hover_x + 10))
+            callout_y = max(18, self.hover_y - 20)
+            c.create_rectangle(callout_x, callout_y, callout_x + 95, callout_y + 20, fill="#111827", outline="#38bdf8")
+            c.create_text(callout_x + 47, callout_y + 10, text=f"y: {pt_val:.2f} cm", fill="#38bdf8", font=("Consolas", 8, "bold"))
 
     def animate_loop(self):
         curr_time = time.time()
@@ -1023,7 +1024,6 @@ class PIDControlSuite(tk.Tk):
         if dt > 0.1:
             dt = 0.03
 
-        # Frame rate calculation
         self.frame_count += 1
         if curr_time - self.fps_timer >= 1.0:
             self.live_fps = self.frame_count / (curr_time - self.fps_timer)
@@ -1033,7 +1033,6 @@ class PIDControlSuite(tk.Tk):
         if self.mode == "sim":
             self.physics_step(dt)
 
-        # Oscilloscope updates only if not frozen
         if not self.scope_frozen:
             self.target_buffer.pop(0)
             self.target_buffer.append(self.target)
@@ -1044,7 +1043,6 @@ class PIDControlSuite(tk.Tk):
             self.ctrl_buffer.pop(0)
             self.ctrl_buffer.append(self.control_output)
 
-        # Update telemetry badges
         self.card_target.config(text=f"{self.target:.1f} cm")
         self.card_pos.config(text=f"{self.position:.1f} cm")
         err = self.target - self.position
@@ -1070,7 +1068,7 @@ class PIDControlSuite(tk.Tk):
         self.draw_animation()
         self.draw_oscilloscope()
 
-        self.after(26, self.animate_loop)
+        self.after(25, self.animate_loop)
 
 
 if __name__ == "__main__":
