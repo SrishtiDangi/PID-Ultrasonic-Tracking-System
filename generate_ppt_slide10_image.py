@@ -130,3 +130,4 @@ def generate_slide10_graphic():
 
 if __name__ == "__main__":
     generate_slide10_graphic()
+

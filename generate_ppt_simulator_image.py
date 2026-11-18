@@ -201,3 +201,4 @@ def generate_simulator_assets():
 
 if __name__ == "__main__":
     generate_simulator_assets()
+
