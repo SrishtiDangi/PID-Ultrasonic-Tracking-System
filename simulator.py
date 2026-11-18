@@ -1,22 +1,22 @@
 """
 ================================================================================
-PID ULTRASONIC TRACKING & BALL-ON-BEAM CONTROL SUITE (100 MARKS)
-Advanced Control Engineering Bench with Dual Mechanical Rigs & Dynamic Analytics
+PID ULTRASONIC TRACKING & BALL-ON-BEAM CONTROL BENCH (100 MARKS)
+Featuring Live Dynamic Physics Force Vectors, Ball Rotation & Dual Rigs
 ================================================================================
 
-Core Features:
-1. Dual Mechanical Plant Rigs:
-   - ⚖️ RIG 1: Classic Ball-and-Beam Balance System (MIT/Stanford Benchmark Problem)
-   - 🎯 RIG 2: 1-DOF Linear Ultrasonic Distance Tracker with HC-SR04 & SG90 Servo
-2. Advanced Trajectory Generator:
-   - ⏹️ Step Input (Standard Setpoint: 15cm, 20cm, 30cm)
-   - 🌊 Dynamic Sine Wave Trajectory Generator (Frequency & Amplitude Tracking)
-   - 🔲 Square Wave Cyclic Disturbance Testing
-3. Control Engineering Quality Metrics:
-   - Integral of Absolute Error (IAE = ∫|e| dt) & ISE (Integral Square Error)
-   - Real-time Oscillation Frequency & Resonance Spectrum Detector
-   - Proportional, Integral, Derivative Live Energy Decomposition
-4. Virtual 16x2 LCD Display & USB Hardware-in-the-Loop Mode
+Highlights:
+1. Dynamic Real-Time Physics Vectors:
+   - 🟢 Velocity Vector (v): Dynamically stretches with ball speed & direction
+   - 🟡 Gravity Acceleration Vector (a = 5/7 g·sin θ): Shows slope pull
+   - 🔵 PID Restoration Thrust Vector (F_pid): Shows active servo control effort
+   - 🔴 Instantaneous Error Displacement Vector (e = Target - Position)
+2. Realistic Mechanical Rig Animations:
+   - ⚖️ Ball-on-Beam: 3D-shaded steel ball with rotating surface markers (spins as it rolls!)
+     pivoted aluminum beam with dynamic tilt (-25° to +25°), servo tie-rod linkage
+   - 🎯 1-DOF Linear Distance Tracker: HC-SR04 ultrasonic transducer with bouncing echo waves,
+     reflective target carriage, and live virtual 16x2 LCD display
+3. Trajectory Generator (Step, Continuous Sine Tracking @ 0.25 Hz, Square Pulse)
+4. Formal Performance Index: Integral of Absolute Error (IAE = ∫|e| dt)
 """
 
 import sys
@@ -39,36 +39,40 @@ class AdvancedPIDBench(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("PID Ultrasonic Control Engineering Bench // Capstone 100 Marks")
-        self.geometry("1080x760")
-        self.configure(bg="#0f172a")
-        self.minsize(980, 680)
+        self.geometry("1100x780")
+        self.configure(bg="#0b0f19")
+        self.minsize(960, 680)
 
         # Operational States
         self.mode = "sim"                     # "sim" or "hw"
         self.rig_type = "beam"                # "beam" (Ball & Beam) or "tracker" (Linear distance)
         self.trajectory_mode = "step"         # "step", "sine", "square"
         self.controller_type = "PID"          # "PID" or "ON_OFF"
+        self.show_vectors = True              # Toggle force vectors
         self.is_hw_connected = False
         self.ser = None
 
-        # Physical Plant Dynamics (2nd-Order Model)
+        # Physical Plant Dynamics
         self.position = 20.0                  # cm (ball position on beam / object distance)
         self.velocity = 0.0                  # cm/s
+        self.acceleration = 0.0              # cm/s^2
         self.target = 20.0                    # cm (desired distance / balance point)
-        self.beam_angle = 0.0                # degrees (-25 to +25 deg)
+        self.beam_angle = 0.0                # degrees (-22 to +22 deg)
+        self.plant_mass = 1.0                # kg
+        self.plant_damping = 2.2             # N*s/cm (viscous friction)
         self.noise_amp = 0.20                # cm
 
+        # Ball Visual Rotation State
+        self.ball_rotation_angle = 0.0       # degrees (spins as it rolls)
+
         # Trajectory Generator State
-        self.sine_freq = 0.25                 # Hz
-        self.sine_amp = 10.0                  # cm (+/- 10cm)
+        self.sine_freq = 0.22                 # Hz
+        self.sine_amp = 10.0                  # cm
         self.traj_time = 0.0
 
-        # Performance Indexes (Formal Academic Control Metrics)
+        # Performance Indexes
         self.iae = 0.0                        # Integral of Absolute Error (∫|e| dt)
         self.ise = 0.0                        # Integral of Square Error (∫e² dt)
-        self.dominant_freq = 0.0              # Hz (oscillation frequency)
-        self.zero_crossings = 0
-        self.zc_timer = time.time()
 
         # PID Controller Parameters
         self.kp = 2.40
@@ -100,88 +104,97 @@ class AdvancedPIDBench(tk.Tk):
         self.run_loop()
 
     def build_ui(self):
-        # 1. COMMAND & RIG SELECTION HEADER
-        header = tk.Frame(self, bg="#1e293b", padx=14, pady=8)
+        # 1. COMMAND HEADER
+        header = tk.Frame(self, bg="#111827", padx=14, pady=8, highlightthickness=1, highlightbackground="#1f293d")
         header.pack(fill=tk.X, side=tk.TOP)
 
-        title_box = tk.Frame(header, bg="#1e293b")
+        title_box = tk.Frame(header, bg="#111827")
         title_box.pack(side=tk.LEFT)
-        tk.Label(title_box, text="PID ULTRASONIC CONTROL ENGINEERING BENCH", fg="#38bdf8", bg="#1e293b", font=("Segoe UI", 12, "bold")).pack(anchor="w")
-        tk.Label(title_box, text="Discrete Compensator • Dual Mechanical Rigs • Dynamic Trajectory Tracking", fg="#94a3b8", bg="#1e293b", font=("Segoe UI", 8)).pack(anchor="w")
+        tk.Label(title_box, text="PID ULTRASONIC DYNAMIC CONTROL SUITE", fg="#38bdf8", bg="#111827", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        tk.Label(title_box, text="Real-Time Vector Field • Mechanical Ball-on-Beam Rig • Dynamic Trajectory Engine", fg="#94a3b8", bg="#111827", font=("Segoe UI", 8)).pack(anchor="w")
 
-        controls_box = tk.Frame(header, bg="#1e293b")
+        controls_box = tk.Frame(header, bg="#111827")
         controls_box.pack(side=tk.RIGHT)
 
-        # Rig Switcher (Ball & Beam vs Linear Tracker)
+        # Force Vectors Toggle
+        self.btn_vectors = tk.Button(controls_box, text="🎯 Vectors: ON", command=self.toggle_vectors, bg="#059669", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, cursor="hand2")
+        self.btn_vectors.pack(side=tk.LEFT, padx=3)
+
+        # Rig Switcher
         self.btn_rig = tk.Button(controls_box, text="Rig: ⚖️ Ball-on-Beam", command=self.toggle_rig, bg="#6366f1", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, cursor="hand2")
-        self.btn_rig.pack(side=tk.LEFT, padx=4)
+        self.btn_rig.pack(side=tk.LEFT, padx=3)
 
         # Trajectory Mode Switcher
         self.btn_traj = tk.Button(controls_box, text="Trajectory: Step", command=self.cycle_trajectory, bg="#0284c7", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, cursor="hand2")
-        self.btn_traj.pack(side=tk.LEFT, padx=4)
+        self.btn_traj.pack(side=tk.LEFT, padx=3)
 
         # PID vs Bang-Bang Mode
-        self.btn_algo = tk.Button(controls_box, text="Mode: PID", command=self.toggle_algo, bg="#059669", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, cursor="hand2")
-        self.btn_algo.pack(side=tk.LEFT, padx=4)
+        self.btn_algo = tk.Button(controls_box, text="Mode: PID", command=self.toggle_algo, bg="#0ea5e9", fg="white", font=("Segoe UI", 8, "bold"), relief="flat", padx=9, pady=3, cursor="hand2")
+        self.btn_algo.pack(side=tk.LEFT, padx=3)
 
         # Hardware COM Port
         self.port_combo = ttk.Combobox(controls_box, width=7, state="readonly")
         self.port_combo.pack(side=tk.LEFT, padx=3)
         self.refresh_ports()
-        self.btn_hw = tk.Button(controls_box, text="USB", command=self.toggle_serial, bg="#334155", fg="#cbd5e1", font=("Segoe UI", 8, "bold"), relief="flat", padx=6, pady=3, cursor="hand2")
+        self.btn_hw = tk.Button(controls_box, text="USB", command=self.toggle_serial, bg="#1f293d", fg="#94a3b8", font=("Segoe UI", 8, "bold"), relief="flat", padx=6, pady=3, cursor="hand2")
         self.btn_hw.pack(side=tk.LEFT, padx=2)
 
-        # 2. TELEMETRY BADGES ROW (Including Academic Cost Functions IAE/ISE)
-        tiles_frame = tk.Frame(self, bg="#0f172a", padx=12, pady=6)
+        # 2. STATUS TILES ROW
+        tiles_frame = tk.Frame(self, bg="#0b0f19", padx=12, pady=5)
         tiles_frame.pack(fill=tk.X)
 
         self.lbl_target = self.make_tile(tiles_frame, "TARGET SETPOINT (r)", "20.0 cm", "#38bdf8", 0)
         self.lbl_measured = self.make_tile(tiles_frame, "MEASURED POSITION (y)", "20.0 cm", "#10b981", 1)
         self.lbl_error = self.make_tile(tiles_frame, "TRACKING ERROR (e)", "0.0 cm", "#f43f5e", 2)
         self.lbl_servo = self.make_tile(tiles_frame, "SERVO ANGLE (θ)", "90°", "#fbbf24", 3)
-        self.lbl_iae = self.make_tile(tiles_frame, "ERROR INDEX (IAE = ∫|e|dt)", "0.0", "#a78bfa", 4)
-        self.lbl_freq = self.make_tile(tiles_frame, "LOOP FREQUENCY", "40.0 Hz", "#34d399", 5)
+        self.lbl_velocity = self.make_tile(tiles_frame, "BALL VELOCITY (v)", "0.0 cm/s", "#34d399", 4)
+        self.lbl_iae = self.make_tile(tiles_frame, "ACCUMULATED ERROR (IAE)", "0.0", "#a78bfa", 5)
 
-        # 3. CENTER VIEWPORTS: MECHANICAL RIG ANIMATION (TOP) + OSCILLOSCOPE (BOTTOM)
-        center_frame = tk.Frame(self, bg="#0f172a", padx=12)
+        # 3. CENTER VIEWPORTS: ANIMATION (TOP) + OSCILLOSCOPE (BOTTOM)
+        center_frame = tk.Frame(self, bg="#0b0f19", padx=12)
         center_frame.pack(fill=tk.BOTH, expand=True)
 
-        # 3A. Mechanical Plant Animation Viewport
-        anim_card = tk.Frame(center_frame, bg="#1e293b", highlightthickness=1, highlightbackground="#334155")
+        # 3A. Mechanical Plant Animation Viewport with Vector Legend
+        anim_card = tk.Frame(center_frame, bg="#111827", highlightthickness=1, highlightbackground="#1f293d")
         anim_card.pack(fill=tk.X, pady=3)
 
-        anim_hdr = tk.Frame(anim_card, bg="#1e293b", padx=8, pady=3)
+        anim_hdr = tk.Frame(anim_card, bg="#111827", padx=8, pady=3)
         anim_hdr.pack(fill=tk.X)
-        self.anim_title_lbl = tk.Label(anim_hdr, text="MECHANICAL RIG: ⚖️ CLASSIC BALL-AND-BEAM SYSTEM (ULTRASONIC BALANCING)", fg="#38bdf8", bg="#1e293b", font=("Segoe UI", 8, "bold"))
+        self.anim_title_lbl = tk.Label(anim_hdr, text="RIG: ⚖️ CLASSIC BALL-AND-BEAM (ULTRASONIC BALANCING WITH ROTATION & FORCE VECTORS)", fg="#38bdf8", bg="#111827", font=("Segoe UI", 8, "bold"))
         self.anim_title_lbl.pack(side=tk.LEFT)
-        self.anim_sub_lbl = tk.Label(anim_hdr, text="PHYSICS: GRAVITY ACCELERATION g•sin(θ) BALANCED BY ACTUATOR COUNTER-TORQUE", fg="#94a3b8", bg="#1e293b", font=("Segoe UI", 7))
-        self.anim_sub_lbl.pack(side=tk.RIGHT)
 
-        self.anim_canvas = tk.Canvas(anim_card, height=140, bg="#090d16", highlightthickness=0)
+        # Vector Legends
+        v_leg = tk.Frame(anim_hdr, bg="#111827")
+        v_leg.pack(side=tk.RIGHT)
+        tk.Label(v_leg, text="→ Velocity (v)", fg="#34d399", bg="#111827", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=6)
+        tk.Label(v_leg, text="→ Gravity Force (a)", fg="#fbbf24", bg="#111827", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=6)
+        tk.Label(v_leg, text="→ PID Thrust (F)", fg="#38bdf8", bg="#111827", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=6)
+
+        self.anim_canvas = tk.Canvas(anim_card, height=170, bg="#070a12", highlightthickness=0)
         self.anim_canvas.pack(fill=tk.X, expand=True)
 
         # 3B. Real-Time Oscilloscope Viewport
-        graph_card = tk.Frame(center_frame, bg="#1e293b", highlightthickness=1, highlightbackground="#334155")
+        graph_card = tk.Frame(center_frame, bg="#111827", highlightthickness=1, highlightbackground="#1f293d")
         graph_card.pack(fill=tk.BOTH, expand=True, pady=3)
 
-        graph_hdr = tk.Frame(graph_card, bg="#1e293b", padx=8, pady=3)
+        graph_hdr = tk.Frame(graph_card, bg="#111827", padx=8, pady=3)
         graph_hdr.pack(fill=tk.X)
-        tk.Label(graph_hdr, text="LIVE TIME-DOMAIN OSCILLOSCOPE", fg="#e2e8f0", bg="#1e293b", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
-        tk.Label(graph_hdr, text="■ Target r(t)", fg="#38bdf8", bg="#1e293b", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=10)
-        tk.Label(graph_hdr, text="■ Output y(t)", fg="#10b981", bg="#1e293b", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
-        tk.Label(graph_hdr, text="■ Effort u(t)", fg="#fbbf24", bg="#1e293b", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
+        tk.Label(graph_hdr, text="TIME-DOMAIN WAVEFORM (OSCILLOSCOPE)", fg="#e2e8f0", bg="#111827", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        tk.Label(graph_hdr, text="■ Target r(t)", fg="#38bdf8", bg="#111827", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=10)
+        tk.Label(graph_hdr, text="■ Output y(t)", fg="#10b981", bg="#111827", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
+        tk.Label(graph_hdr, text="■ Effort u(t)", fg="#fbbf24", bg="#111827", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=6)
 
-        self.status_msg = tk.Label(graph_hdr, text="Trajectory: Stationary Setpoint @ 20.0 cm", fg="#38bdf8", bg="#1e293b", font=("Segoe UI", 8))
+        self.status_msg = tk.Label(graph_hdr, text="Trajectory: Stationary Setpoint @ 20.0 cm", fg="#38bdf8", bg="#111827", font=("Segoe UI", 8))
         self.status_msg.pack(side=tk.RIGHT, padx=6)
 
-        self.graph_canvas = tk.Canvas(graph_card, bg="#05070c", highlightthickness=0)
+        self.graph_canvas = tk.Canvas(graph_card, bg="#05070e", highlightthickness=0)
         self.graph_canvas.pack(fill=tk.BOTH, expand=True)
 
-        # 4. BOTTOM BENCH CONTROLS: LIVE PID SLIDERS & TEST GENERATORS
-        ctrl_card = tk.Frame(self, bg="#1e293b", padx=12, pady=6, highlightthickness=1, highlightbackground="#334155")
+        # 4. BOTTOM BENCH CONTROLS
+        ctrl_card = tk.Frame(self, bg="#111827", padx=12, pady=6, highlightthickness=1, highlightbackground="#1f293d")
         ctrl_card.pack(fill=tk.X, side=tk.BOTTOM, padx=12, pady=6)
 
-        sliders_frame = tk.Frame(ctrl_card, bg="#1e293b")
+        sliders_frame = tk.Frame(ctrl_card, bg="#111827")
         sliders_frame.pack(fill=tk.X)
 
         self.s_kp = self.add_slider(sliders_frame, "PROPORTIONAL (Kp):", 0.0, 8.0, self.kp, 0.1, "#38bdf8", 0)
@@ -189,66 +202,69 @@ class AdvancedPIDBench(tk.Tk):
         self.s_kd = self.add_slider(sliders_frame, "DERIVATIVE (Kd):", 0.0, 2.5, self.kd, 0.05, "#fbbf24", 2)
         self.s_target = self.add_slider(sliders_frame, "TARGET SETPOINT (cm):", 5.0, 45.0, self.target, 1.0, "#a78bfa", 3)
 
-        # Actions & Probes Row
-        btn_row = tk.Frame(ctrl_card, bg="#1e293b", pady=3)
+        btn_row = tk.Frame(ctrl_card, bg="#111827", pady=3)
         btn_row.pack(fill=tk.X)
 
-        tk.Label(btn_row, text="TRAJECTORY PROBES:", fg="#94a3b8", bg="#1e293b", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
+        tk.Label(btn_row, text="TRAJECTORY PROBES:", fg="#94a3b8", bg="#111827", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=3)
         for t_val in [15, 20, 30]:
-            tk.Button(btn_row, text=f"Step {t_val} cm", command=lambda v=t_val: self.set_target(v), bg="#334155", fg="white", relief="flat", padx=8, pady=1, font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=2)
+            tk.Button(btn_row, text=f"Step {t_val} cm", command=lambda v=t_val: self.set_target(v), bg="#1f293d", fg="white", relief="flat", padx=8, pady=1, font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=2)
 
-        tk.Label(btn_row, text="|", fg="#475569", bg="#1e293b").pack(side=tk.LEFT, padx=6)
+        tk.Label(btn_row, text="|", fg="#374151", bg="#111827").pack(side=tk.LEFT, padx=6)
 
-        # Disturbance & Reset Buttons
-        tk.Button(btn_row, text="⚡ NUDGE OBJECT (+10 cm PUSH)", command=self.apply_disturbance, bg="#e11d48", fg="white", relief="flat", padx=10, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=3)
+        tk.Button(btn_row, text="⚡ NUDGE BALL (+10 cm PUSH)", command=self.apply_disturbance, bg="#e11d48", fg="white", relief="flat", padx=10, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=3)
         tk.Button(btn_row, text="🌊 SINE WAVE TRACKING", command=lambda: self.set_trajectory("sine"), bg="#0284c7", fg="white", relief="flat", padx=9, pady=2, font=("Segoe UI", 8, "bold"), cursor="hand2").pack(side=tk.LEFT, padx=3)
-        tk.Button(btn_row, text="Reset Error Index (IAE)", command=self.reset_metrics, bg="#334155", fg="#cbd5e1", relief="flat", padx=7, pady=2, font=("Segoe UI", 7)).pack(side=tk.LEFT, padx=3)
+        tk.Button(btn_row, text="Reset Error Index (IAE)", command=self.reset_metrics, bg="#1f293d", fg="#cbd5e1", relief="flat", padx=7, pady=2, font=("Segoe UI", 7)).pack(side=tk.LEFT, padx=3)
 
     def make_tile(self, parent, title, val, color, col):
-        frame = tk.Frame(parent, bg="#1e293b", padx=8, pady=5, highlightthickness=1, highlightbackground="#334155")
+        frame = tk.Frame(parent, bg="#111827", padx=8, pady=5, highlightthickness=1, highlightbackground="#1f293d")
         frame.grid(row=0, column=col, padx=3, sticky="nsew")
         parent.grid_columnconfigure(col, weight=1)
 
         accent = tk.Frame(frame, bg=color, height=2)
         accent.pack(fill=tk.X, side=tk.TOP, pady=(0, 3))
 
-        tk.Label(frame, text=title, fg="#94a3b8", bg="#1e293b", font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        lbl = tk.Label(frame, text=val, fg=color, bg="#1e293b", font=("Consolas", 11, "bold"))
+        tk.Label(frame, text=title, fg="#94a3b8", bg="#111827", font=("Segoe UI", 7, "bold")).pack(anchor="w")
+        lbl = tk.Label(frame, text=val, fg=color, bg="#111827", font=("Consolas", 11, "bold"))
         lbl.pack(anchor="w", pady=1)
         return lbl
 
     def add_slider(self, parent, label, from_val, to_val, default_val, res, color, col):
-        box = tk.Frame(parent, bg="#1e293b", padx=5)
+        box = tk.Frame(parent, bg="#111827", padx=5)
         box.grid(row=0, column=col, sticky="ew")
         parent.grid_columnconfigure(col, weight=1)
 
         var = tk.DoubleVar(value=default_val)
-        top = tk.Frame(box, bg="#1e293b")
+        top = tk.Frame(box, bg="#111827")
         top.pack(fill=tk.X)
-        tk.Label(top, text=label, fg="#cbd5e1", bg="#1e293b", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
-        val_lbl = tk.Label(top, text=f"{default_val:.2f}", fg=color, bg="#1e293b", font=("Consolas", 8, "bold"))
+        tk.Label(top, text=label, fg="#cbd5e1", bg="#111827", font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
+        val_lbl = tk.Label(top, text=f"{default_val:.2f}", fg=color, bg="#111827", font=("Consolas", 8, "bold"))
         val_lbl.pack(side=tk.RIGHT)
 
         def on_change(v):
             val_lbl.config(text=f"{float(v):.2f}")
             self.on_param_update()
 
-        scale = tk.Scale(box, from_=from_val, to=to_val, resolution=res, variable=var, orient=tk.HORIZONTAL, showvalue=False, command=on_change, bg="#334155", fg=color, highlightthickness=0, troughcolor="#090d16", activebackground=color)
+        scale = tk.Scale(box, from_=from_val, to=to_val, resolution=res, variable=var, orient=tk.HORIZONTAL, showvalue=False, command=on_change, bg="#1f293d", fg=color, highlightthickness=0, troughcolor="#070a12", activebackground=color)
         scale.pack(fill=tk.X, pady=1)
         scale.var = var
         return scale
+
+    def toggle_vectors(self):
+        self.show_vectors = not self.show_vectors
+        if self.show_vectors:
+            self.btn_vectors.config(text="🎯 Vectors: ON", bg="#059669")
+        else:
+            self.btn_vectors.config(text="🎯 Vectors: OFF", bg="#4b5563")
 
     def toggle_rig(self):
         if self.rig_type == "beam":
             self.rig_type = "tracker"
             self.btn_rig.config(text="Rig: 🎯 1-DOF Tracker", bg="#0284c7")
-            self.anim_title_lbl.config(text="MECHANICAL RIG: 🎯 LINEAR 1-DOF DISTANCE TRACKER (HC-SR04 & SG90 SERVO)")
-            self.anim_sub_lbl.config(text="PHYSICS: DIRECT HORIZONTAL DISPLACEMENT FOLLOWING WITH DEAD-BAND CONTROL")
+            self.anim_title_lbl.config(text="RIG: 🎯 LINEAR 1-DOF DISTANCE TRACKER (HC-SR04 & SG90 SERVO WITH FORCE VECTORS)")
         else:
             self.rig_type = "beam"
             self.btn_rig.config(text="Rig: ⚖️ Ball-on-Beam", bg="#6366f1")
-            self.anim_title_lbl.config(text="MECHANICAL RIG: ⚖️ CLASSIC BALL-AND-BEAM SYSTEM (ULTRASONIC BALANCING)")
-            self.anim_sub_lbl.config(text="PHYSICS: GRAVITY ACCELERATION g•sin(θ) BALANCED BY ACTUATOR COUNTER-TORQUE")
+            self.anim_title_lbl.config(text="RIG: ⚖️ CLASSIC BALL-AND-BEAM (ULTRASONIC BALANCING WITH ROTATION & FORCE VECTORS)")
 
     def cycle_trajectory(self):
         modes = ["step", "sine", "square"]
@@ -262,7 +278,7 @@ class AdvancedPIDBench(tk.Tk):
             self.status_msg.config(text="Trajectory: Fixed Setpoint Mode", fg="#38bdf8")
         elif mode == "sine":
             self.btn_traj.config(text="Trajectory: 🌊 Sine Wave", bg="#6366f1")
-            self.status_msg.config(text="Trajectory: Continuous Sine Tracking (0.25 Hz)", fg="#a78bfa")
+            self.status_msg.config(text="Trajectory: Continuous Sine Tracking (0.22 Hz)", fg="#a78bfa")
         elif mode == "square":
             self.btn_traj.config(text="Trajectory: 🔲 Square Wave", bg="#d97706")
             self.status_msg.config(text="Trajectory: Alternating Square Setpoint Step", fg="#fbbf24")
@@ -274,7 +290,7 @@ class AdvancedPIDBench(tk.Tk):
             self.status_msg.config(text="ON/OFF Bang-Bang Active: Violent hunting / limit cycles!", fg="#f43f5e")
         else:
             self.controller_type = "PID"
-            self.btn_algo.config(text="Mode: PID", bg="#059669")
+            self.btn_algo.config(text="Mode: PID", bg="#0ea5e9")
             self.status_msg.config(text="PID Active: Smooth exponential settling with zero steady-state offset.", fg="#10b981")
 
     def set_target(self, val):
@@ -299,7 +315,7 @@ class AdvancedPIDBench(tk.Tk):
                 pass
 
     def apply_disturbance(self):
-        self.position = min(48.0, self.position + 10.0)
+        self.position = min(46.0, self.position + 10.0)
         self.velocity += 14.0
         self.status_msg.config(text="Disturbance Injected (+10 cm): PID Counter-acting!", fg="#f43f5e")
 
@@ -337,7 +353,7 @@ class AdvancedPIDBench(tk.Tk):
             self.is_hw_connected = False
             if self.ser and self.ser.is_open:
                 self.ser.close()
-            self.btn_hw.config(text="USB", bg="#334155")
+            self.btn_hw.config(text="USB", bg="#1f293d")
             self.mode = "sim"
 
     def serial_reader(self):
@@ -369,7 +385,7 @@ class AdvancedPIDBench(tk.Tk):
             self.target = 22.0 + self.sine_amp * math.sin(2.0 * math.pi * self.sine_freq * self.traj_time)
             self.s_target.var.set(round(self.target, 1))
         elif self.trajectory_mode == "square":
-            self.target = 15.0 if int(self.traj_time * 0.4) % 2 == 0 else 30.0
+            self.target = 15.0 if int(self.traj_time * 0.35) % 2 == 0 else 30.0
             self.s_target.var.set(self.target)
 
         # Ultrasonic Noise & Filter
@@ -410,30 +426,31 @@ class AdvancedPIDBench(tk.Tk):
             self.control_output = self.p_out + self.i_out + self.d_out
             self.servo_angle = max(25.0, min(155.0, 90.0 + self.control_output))
 
-        # Dynamic Mechanics: Ball & Beam vs Linear Tracker
+        # Dynamic Mechanics & Acceleration calculation
         if self.rig_type == "beam":
-            # Tilt angle of beam proportional to servo rotation:
             self.beam_angle = (self.servo_angle - 90.0) * 0.35 # max +/- 22 deg
-            # Physics of Ball rolling on tilted beam:
-            # a = (5/7) * g * sin(theta) - damping * v
             g = 980.0 # cm/s^2
             theta_rad = math.radians(self.beam_angle)
-            accel = (5.0 / 7.0) * g * math.sin(theta_rad) - (self.plant_damping * self.velocity)
-            self.velocity += accel * dt
+            self.acceleration = (5.0 / 7.0) * g * math.sin(theta_rad) - (self.plant_damping * self.velocity)
+            self.velocity += self.acceleration * dt
             self.position += self.velocity * dt
+            # Ball spins as it rolls on the beam! (ds = R * d_phi -> d_phi = ds / R)
+            ball_radius = 9.0 # px
+            self.ball_rotation_angle = (self.ball_rotation_angle + (self.velocity * dt / 0.15)) % 360.0
         else:
             # Linear Tracker
             tilt_rad = math.radians(self.servo_angle - 90.0)
             net_force = 120.0 * math.sin(tilt_rad) - (self.plant_damping * self.velocity)
-            self.velocity += (net_force / self.plant_mass) * dt
+            self.acceleration = net_force / self.plant_mass
+            self.velocity += self.acceleration * dt
             self.position += self.velocity * dt
 
-        # Beam track boundaries (3 cm to 48 cm)
-        if self.position <= 3.0:
-            self.position = 3.0
-            self.velocity = -0.3 * self.velocity # bounce slightly
-        elif self.position >= 48.0:
-            self.position = 48.0
+        # Boundaries
+        if self.position <= 3.5:
+            self.position = 3.5
+            self.velocity = -0.3 * self.velocity
+        elif self.position >= 47.5:
+            self.position = 47.5
             self.velocity = -0.3 * self.velocity
 
     def draw_mechanical_rig(self):
@@ -450,14 +467,14 @@ class AdvancedPIDBench(tk.Tk):
             self.draw_linear_tracker(c, w, h)
 
     def draw_ball_and_beam(self, c, w, h):
-        """Draws classic Tilting Ball-and-Beam Benchmark System"""
+        """Draws classic Tilting Ball-and-Beam with Rotation and Force Vectors"""
         pivot_x = w // 2 - 40
-        pivot_y = h - 45
+        pivot_y = h - 50
         beam_len = w - 240
 
-        # Pivot Stand (Triangular fulcrum)
-        c.create_polygon(pivot_x - 16, pivot_y + 24, pivot_x + 16, pivot_y + 24, pivot_x, pivot_y, fill="#334155", outline="#64748b", width=2)
-        c.create_oval(pivot_x - 5, pivot_y - 5, pivot_x + 5, pivot_y + 5, fill="#94a3b8")
+        # Pivot Stand & Shadow
+        c.create_polygon(pivot_x - 20, pivot_y + 32, pivot_x + 20, pivot_y + 32, pivot_x, pivot_y, fill="#1f2937", outline="#374151", width=2)
+        c.create_oval(pivot_x - 6, pivot_y - 6, pivot_x + 6, pivot_y + 6, fill="#9ca3af", outline="#ffffff")
 
         # Beam Tilt Math
         ang_rad = math.radians(self.beam_angle)
@@ -467,31 +484,46 @@ class AdvancedPIDBench(tk.Tk):
         x2 = pivot_x + half_len * math.cos(ang_rad)
         y2 = pivot_y - half_len * math.sin(ang_rad)
 
-        # The Aluminum Tilting Beam
-        c.create_line(x1, y1, x2, y2, fill="#38bdf8", width=6)
-        c.create_line(x1, y1, x2, y2, fill="#0284c7", width=2)
+        # Beam Shadow & Body
+        c.create_line(x1, y1 + 4, x2, y2 + 4, fill="#030712", width=8)
+        c.create_line(x1, y1, x2, y2, fill="#0284c7", width=6)
+        c.create_line(x1, y1, x2, y2, fill="#38bdf8", width=2)
 
         # HC-SR04 Mounted at the left end of the tilted beam
-        # Transducer face points along the beam
-        c.create_rectangle(x1 - 10, y1 - 15, x1 + 10, y1 + 15, fill="#0284c7", outline="#38bdf8")
-        c.create_oval(x1 + 6, y1 - 12, x1 + 14, y1 - 2, fill="#cbd5e1")
-        c.create_oval(x1 + 6, y1 + 2, x1 + 14, y1 + 12, fill="#cbd5e1")
-        c.create_text(x1 - 2, y1 - 22, text="HC-SR04", fill="#38bdf8", font=("Segoe UI", 7, "bold"))
+        c.create_rectangle(x1 - 12, y1 - 16, x1 + 12, y1 + 16, fill="#0284c7", outline="#38bdf8", width=2)
+        c.create_oval(x1 + 6, y1 - 13, x1 + 16, y1 - 3, fill="#cbd5e1", outline="#94a3b8")
+        c.create_oval(x1 + 6, y1 + 3, x1 + 16, y1 + 13, fill="#cbd5e1", outline="#94a3b8")
+        c.create_text(x1 - 4, y1 - 24, text="HC-SR04", fill="#38bdf8", font=("Segoe UI", 7, "bold"))
 
         # Rolling Ball (Controlled Plant)
-        pos_frac = (self.position - 3.0) / 45.0
+        pos_frac = (self.position - 3.5) / 44.0
         ball_x = x1 + pos_frac * (x2 - x1)
-        ball_y = y1 + pos_frac * (y2 - y1) - 10
+        ball_y = y1 + pos_frac * (y2 - y1) - 11
 
-        c.create_oval(ball_x - 9, ball_y - 9, ball_x + 9, ball_y + 9, fill="#f59e0b", outline="#ffffff", width=2)
-        c.create_text(ball_x, ball_y - 14, text=f"{self.position:.1f}cm", fill="#fbbf24", font=("Consolas", 8, "bold"))
+        # Ball Shadow
+        c.create_oval(ball_x - 8, ball_y + 6, ball_x + 8, ball_y + 12, fill="#030712", outline="")
+
+        # 3D Shaded Sphere (Metallic Gold Ball)
+        c.create_oval(ball_x - 10, ball_y - 10, ball_x + 10, ball_y + 10, fill="#f59e0b", outline="#fbbf24", width=2)
+        # Specular shine highlight
+        c.create_oval(ball_x - 6, ball_y - 6, ball_x - 1, ball_y - 1, fill="#ffffff", outline="")
+
+        # Spinning marker inside ball to show rolling rotation!
+        rot_rad = math.radians(self.ball_rotation_angle)
+        spoke_dx = 8 * math.cos(rot_rad)
+        spoke_dy = 8 * math.sin(rot_rad)
+        c.create_line(ball_x - spoke_dx, ball_y - spoke_dy, ball_x + spoke_dx, ball_y + spoke_dy, fill="#78350f", width=2)
+        c.create_line(ball_x + spoke_dy, ball_y - spoke_dx, ball_x - spoke_dy, ball_y + spoke_dx, fill="#78350f", width=2)
+
+        c.create_text(ball_x, ball_y - 20, text=f"{self.position:.1f} cm", fill="#fbbf24", font=("Consolas", 8, "bold"))
 
         # Target Setpoint Marker (Cyan Flag on Beam)
-        tgt_frac = (self.target - 3.0) / 45.0
+        tgt_frac = (self.target - 3.5) / 44.0
         tx = x1 + tgt_frac * (x2 - x1)
         ty = y1 + tgt_frac * (y2 - y1)
-        c.create_line(tx, ty - 25, tx, ty, fill="#38bdf8", width=2, dash=(2, 2))
-        c.create_polygon(tx, ty - 25, tx + 10, ty - 20, tx, ty - 15, fill="#38bdf8")
+        c.create_line(tx, ty - 30, tx, ty, fill="#38bdf8", width=2, dash=(2, 2))
+        c.create_polygon(tx, ty - 30, tx + 12, ty - 24, tx, ty - 18, fill="#38bdf8")
+        c.create_text(tx, ty - 36, text=f"Target: {self.target:.0f}cm", fill="#38bdf8", font=("Segoe UI", 8, "bold"))
 
         # Animated Sonar Waves traveling along the tilted beam
         self.wave_phase = (self.wave_phase + 0.18) % 1.0
@@ -503,32 +535,57 @@ class AdvancedPIDBench(tk.Tk):
                 wy = y1 + (ball_y - y1) * prog
                 c.create_arc(wx - 8, wy - 8, wx + 8, wy + 8, start=-40, extent=80, style=tk.ARC, outline="#38bdf8", width=1.5)
 
+        # Dynamic Visual Physics Vectors (Arrows directly on the ball!)
+        if self.show_vectors:
+            # 1. Velocity Vector (Green arrow along beam)
+            v_len = max(-50.0, min(50.0, self.velocity * 2.5))
+            if abs(v_len) > 2.0:
+                vx_end = ball_x + v_len * math.cos(ang_rad)
+                vy_end = ball_y - v_len * math.sin(ang_rad)
+                c.create_line(ball_x, ball_y, vx_end, vy_end, fill="#34d399", width=3, arrow=tk.LAST)
+                c.create_text(vx_end, vy_end - 10, text="v", fill="#34d399", font=("Segoe UI", 8, "bold"))
+
+            # 2. Gravity Acceleration Vector (Yellow arrow)
+            acc_len = max(-45.0, min(45.0, self.acceleration * 0.25))
+            if abs(acc_len) > 2.0:
+                ax_end = ball_x + acc_len * math.cos(ang_rad)
+                ay_end = ball_y - acc_len * math.sin(ang_rad) + 12
+                c.create_line(ball_x, ball_y + 12, ax_end, ay_end, fill="#fbbf24", width=2, arrow=tk.LAST)
+                c.create_text(ax_end, ay_end + 8, text="a_gravity", fill="#fbbf24", font=("Segoe UI", 7, "bold"))
+
+            # 3. PID Thrust Vector (Blue arrow representing counter-torque from servo)
+            f_len = max(-45.0, min(45.0, self.control_output * 1.5))
+            if abs(f_len) > 2.0:
+                fx_end = ball_x - f_len * math.cos(ang_rad)
+                fy_end = ball_y + f_len * math.sin(ang_rad) - 12
+                c.create_line(ball_x, ball_y - 12, fx_end, fy_end, fill="#00f2fe", width=2, arrow=tk.LAST)
+                c.create_text(fx_end, fy_end - 8, text="F_pid", fill="#00f2fe", font=("Segoe UI", 7, "bold"))
+
         # Servo Motor & Mechanical Linkage on the Right
         servo_x = w - 85
         servo_y = h - 45
-        c.create_rectangle(servo_x - 20, servo_y - 18, servo_x + 20, servo_y + 18, fill="#0284c7", outline="#38bdf8", width=1)
+        c.create_rectangle(servo_x - 22, servo_y - 20, servo_x + 22, servo_y + 20, fill="#0284c7", outline="#38bdf8", width=1)
         c.create_oval(servo_x - 6, servo_y - 6, servo_x + 6, servo_y + 6, fill="#ffffff")
 
         horn_rad = math.radians(self.servo_angle - 180)
         hx = servo_x + 22 * math.cos(horn_rad)
         hy = servo_y + 22 * math.sin(horn_rad)
-        c.create_line(servo_x, servo_y, hx, hy, fill="#fbbf24", width=3)
-        # Tie-rod mechanical push-linkage from servo horn to beam end (x2, y2)
+        c.create_line(servo_x, servo_y, hx, hy, fill="#fbbf24", width=4)
         c.create_line(hx, hy, x2, y2, fill="#94a3b8", width=2, dash=(3, 2))
-        c.create_text(servo_x, servo_y + 25, text=f"Servo: {int(self.servo_angle)}°", fill="#fbbf24", font=("Consolas", 8, "bold"))
+        c.create_text(servo_x, servo_y + 28, text=f"Servo: {int(self.servo_angle)}°", fill="#fbbf24", font=("Consolas", 8, "bold"))
 
     def draw_linear_tracker(self, c, w, h):
-        """Draws 1-DOF Linear Tracker with Obstacle & 16x2 LCD Mockup"""
-        track_y = h - 35
+        """Draws 1-DOF Linear Tracker with Obstacle & Force Vectors"""
+        track_y = h - 40
         start_x = 90
         end_x = w - 180
         track_w = end_x - start_x
 
-        c.create_line(start_x - 10, track_y, end_x + 10, track_y, fill="#334155", width=2)
+        c.create_line(start_x - 10, track_y, end_x + 10, track_y, fill="#374151", width=3)
         for cm in range(0, 55, 10):
             tx = start_x + (cm / 50.0) * track_w
-            c.create_line(tx, track_y, tx, track_y + 6, fill="#64748b", width=1)
-            c.create_text(tx, track_y + 16, text=f"{cm}cm", fill="#94a3b8", font=("Consolas", 7))
+            c.create_line(tx, track_y, tx, track_y + 6, fill="#6b7280", width=1)
+            c.create_text(tx, track_y + 16, text=f"{cm}cm", fill="#9ca3af", font=("Consolas", 7))
 
         # Sensor
         sensor_x = start_x - 45
@@ -547,13 +604,25 @@ class AdvancedPIDBench(tk.Tk):
         # Object
         pos_clamped = max(0.0, min(50.0, self.position))
         obj_x = start_x + (pos_clamped / 50.0) * track_w
-        obj_y = track_y - 18
-        c.create_rectangle(obj_x - 4, obj_y - 25, obj_x + 4, obj_y + 18, fill="#e2e8f0", outline="#38bdf8", width=2)
-        c.create_text(obj_x, obj_y - 32, text=f"{self.position:.1f}cm", fill="#10b981", font=("Consolas", 8, "bold"))
+        obj_y = track_y - 20
+        c.create_rectangle(obj_x - 6, obj_y - 28, obj_x + 6, obj_y + 20, fill="#e2e8f0", outline="#38bdf8", width=2)
+        c.create_text(obj_x, obj_y - 36, text=f"{self.position:.1f} cm", fill="#10b981", font=("Consolas", 8, "bold"))
+
+        # Vectors on Object
+        if self.show_vectors:
+            v_len = max(-50.0, min(50.0, self.velocity * 2.5))
+            if abs(v_len) > 2.0:
+                c.create_line(obj_x, obj_y, obj_x + v_len, obj_y, fill="#34d399", width=3, arrow=tk.LAST)
+                c.create_text(obj_x + v_len, obj_y - 10, text="v", fill="#34d399", font=("Segoe UI", 8, "bold"))
+
+            f_len = max(-45.0, min(45.0, self.control_output * 1.5))
+            if abs(f_len) > 2.0:
+                c.create_line(obj_x, obj_y - 12, obj_x + f_len, obj_y - 12, fill="#00f2fe", width=2, arrow=tk.LAST)
+                c.create_text(obj_x + f_len, obj_y - 22, text="F_pid", fill="#00f2fe", font=("Segoe UI", 7, "bold"))
 
         # Waves
         self.wave_phase = (self.wave_phase + 0.18) % 1.0
-        gap = (obj_x - 4) - (sensor_x + 18)
+        gap = (obj_x - 6) - (sensor_x + 18)
         if gap > 20:
             for w_idx in range(3):
                 prog = (self.wave_phase + w_idx * 0.33) % 1.0
@@ -582,7 +651,7 @@ class AdvancedPIDBench(tk.Tk):
 
         for cm in [10, 20, 30, 40]:
             y_px = h - int((cm / y_max) * h)
-            c.create_line(0, y_px, w, y_px, fill="#1e293b", dash=(2, 4))
+            c.create_line(0, y_px, w, y_px, fill="#1f293d", dash=(2, 4))
             c.create_text(24, y_px - 8, text=f"{cm} cm", fill="#64748b", font=("Consolas", 7))
 
         dx = w / (self.buf_len - 1)
@@ -629,6 +698,7 @@ class AdvancedPIDBench(tk.Tk):
         sign = "+" if err > 0 else ""
         self.lbl_error.config(text=f"{sign}{err:.1f} cm")
         self.lbl_servo.config(text=f"{int(self.servo_angle)}°")
+        self.lbl_velocity.config(text=f"{self.velocity:+.1f} cm/s")
         self.lbl_iae.config(text=f"{self.iae:.1f}")
 
         self.draw_mechanical_rig()
