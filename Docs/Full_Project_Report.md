@@ -22,6 +22,32 @@ In automated manufacturing, robotic arm positioning, and automated levitation sy
 3. **Interactive Simulation:** Provide a standalone physics simulator capable of evaluating transient stability, step response, and disturbance rejection without requiring hardware.
 4. **Embedded Hardware Implementation:** Deploy the discrete PID algorithm on an ATmega328P microcontroller with non-blocking execution, real-time telemetry, and automated failsafe recovery.
 
+### 2.1 System Constants, Units, and Kinematic Linkage Specifications
+To guarantee rigorous dimensional consistency across firmware, desktop simulation, and experimental verification, the following standard units, physical constants, and geometric linkage parameters are established:
+
+| Quantity | Symbol | Standard Units | Operational Domain / Value | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Tracked Position & Feedback** | $r(t), y(t)$ | Centimeters ($\text{cm}$) | $3.0\text{ cm} \le y \le 45.0\text{ cm}$ | Measured by HC-SR04 sonar |
+| **Linear Velocity** | $v(t) = \dot{r}$ | $\text{cm/s}$ | $\pm 80.0\text{ cm/s}$ | First derivative of position |
+| **Linear Acceleration** | $a(t) = \ddot{r}$ | $\text{cm/s}^2$ | $\pm 350.0\text{ cm/s}^2$ | Second derivative of position |
+| **Beam Deflection Angle** | $\alpha$ | Degrees ($^\circ$) & Radians ($\text{rad}$) | $-10.0^\circ \le \alpha \le +10.0^\circ$ | Derived via pushrod kinematics |
+| **Servo Actuator Command** | $\theta_{\text{servo}}$ | Degrees ($^\circ$) | $20^\circ \le \theta \le 160^\circ$ | Neutral horizontal = $90^\circ$ |
+| **Servo Arm Radius** | $r_{\text{arm}}$ | Centimeters ($\text{cm}$) | $2.0\text{ cm}$ | Radius from servo spline to horn hole |
+| **Fulcrum-to-Linkage Pitch** | $L_{\text{linkage}}$ | Centimeters ($\text{cm}$) | $14.0\text{ cm}$ | Beam attachment distance from fulcrum |
+| **Kinematic Linkage Ratio** | $K_{\text{linkage}}$ | $\text{rad/rad}$ or $^\circ/^\circ$ | $\frac{r_{\text{arm}}}{L_{\text{linkage}}} = \frac{2.0}{14.0} \approx 0.1429$ | Beam angle $\alpha \approx K_{\text{linkage}}(\theta - 90^\circ)$ |
+| **Gravitational Acceleration** | $g$ | $\text{cm/s}^2$ | $981.0\text{ cm/s}^2$ | Standard Earth gravity |
+| **Ball Mass Factor** | $\eta_{\text{ball}}$ | Dimensionless | $\frac{m}{m + J/R^2} = \frac{5}{7} \approx 0.7143$ | Solid uniform sphere rolling without slip |
+| **Effective Gravity Gain** | $K_g$ | $\text{cm/(s}^2\cdot^\circ\text{)}$ | $\frac{5}{7} g \cdot \frac{\pi}{180} \approx 12.23$ | Linear acceleration per beam degree |
+| **Coupled Plant Gain** | $K_{\text{plant}}$ | $\text{cm/(s}^2\cdot^\circ\text{)}$ | $K_g \cdot K_{\text{linkage}} \approx 1.747$ | Ball acceleration per servo degree |
+| **Proportional Gain** | $K_p$ | $^\circ/\text{cm}$ | Default $2.40^\circ/\text{cm}$ | Servo deflection per cm error |
+| **Integral Gain** | $K_i$ | $^\circ/(\text{cm}\cdot\text{s})$ | Default $0.04^\circ/(\text{cm}\cdot\text{s})$ | Accumulated error compensation |
+| **Derivative Gain** | $K_d$ | $^\circ\cdot\text{s}/\text{cm}$ | Default $0.90^\circ\cdot\text{s}/\text{cm}$ | Velocity damping compensation |
+| **Cumulative Error (IAE)** | $\text{IAE}$ | $\text{cm}\cdot\text{s}$ | Windowed / Per-step | Integral of Absolute Error |
+| **Time-Weighted Error (ITAE)**| $\text{ITAE}$ | $\text{cm}\cdot\text{s}^2$ | Windowed / Per-step | Integral of Time-weighted Abs Error |
+
+> [!IMPORTANT]
+> **Hardware Validation Protocol:** In compliance with strict academic integrity standards, hardware validation is never claimed or published using theoretical assertions. Experimental validation is accepted exclusively through logged physical CSV time-series telemetry (`timestamp, setpoint, distance, error, servo_angle, Kp, Ki, Kd`) captured across the serial interface from the physical ATmega328P microcontroller.
+
 ---
 
 ## 3. MATHEMATICAL MODELING & CONTROLLER DESIGN
